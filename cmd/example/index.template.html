@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="static/bootstrap-4.5.2.min.css" />
+  
+  <title>{{.AppBase}} - {{.AppPath}}</title>
+  <script>
+    window.addEventListener("load", function(evt) {
+      var ws;
+      const output = document.getElementById("output");
+      const input = document.getElementById("input");
+      const history = [];
+      const display_max = 1000;
+
+      const update_output = function() {
+        const start = Math.max(0, history.length - display_max);
+        const tail = history.slice(start, start + display_max);
+        output.value = tail.join("\n");
+        output.scrollTop = output.scrollHeight;
+      };
+
+      const print = function(msg) {
+        history.push(msg);
+        update_output();
+      }
+
+      const open = function(evt) {
+        if (ws) {
+          return false;
+        }
+        ws = new WebSocket("{{.WsAddr}}");
+        ws.onopen = function(evt) {
+          print("OPEN");
+        }
+        ws.onclose = function(evt) {
+          print("CLOSE");
+          ws = null;
+        }
+        ws.onmessage = function(evt) {
+          print("RESPONSE: " + evt.data);
+        }
+        ws.onerror = function(evt) {
+          print("ERROR: " + evt.data);
+        }
+        return false;
+      };
+
+      const close = function(evt) {
+        if (!ws) {
+          return false;
+        }
+        ws.close();
+        return false;
+      };
+
+      const send = function(msg) {
+        if (!ws) {
+          return false;
+        }
+        ws.send(msg);
+        return true;
+      }
+
+      document.getElementById("send").onclick = function(evt) {
+        send(input.value);
+        return false;
+      };
+      document.getElementById("close").onclick = close;
+      document.getElementById("open").onclick = open;
+
+      open();
+    });
+  </script>
+</head>
+<body>
+
+  <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+  <script src="static/jquery-3.5.1.slim.min.js"></script>
+  <script src="static/popper-1.16.1.min.js"></script>
+  <script src="static/bootstrap-4.5.2.min.js"></script>
+
+  <div class="container">
+    <h2>{{.AppBase}}</h2>
+  <div class="row">
+    <div class="col">
+      Click "Open" to create a connection to the server, "Send" to send a message to the server and "Close" to close the connection. You can change the message and send multiple times.
+      <form>
+        <button class="btn btn-primary" id="open">Open</button>
+        <button class="btn btn-primary" id="close">Close</button>
+        <input id="input" type="text" class="form-control"/>
+        <button id="send" class="btn btn-secondary" type="button">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <div class="form-group">
+        <label for="output">Large textarea</label>
+        <textarea class="form-control rounded-0" id="output" rows="10"></textarea>
+      </div>
+    </div>
+  </div>
+  </div>
+
+</body>
+</html>
