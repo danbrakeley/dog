@@ -1,112 +1,169 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Required meta tags -->
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+<!-- Required meta tags -->
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
 
-  <!-- Bootstrap CSS -->
-  <link rel="stylesheet" href="static/bootstrap-4.5.2.min.css" />
-  
-  <title>{{.AppBase}} - {{.AppPath}}</title>
-  <script>
-    window.addEventListener("load", function(evt) {
-      var ws;
-      const output = document.getElementById("output");
-      const input = document.getElementById("input");
-      const history = [];
-      const display_max = 1000;
+<title>{{.AppBase}} - {{.AppPath}}</title>
 
-      const update_output = function() {
-        const start = Math.max(0, history.length - display_max);
-        const tail = history.slice(start, start + display_max);
-        output.value = tail.join("\n");
-        output.scrollTop = output.scrollHeight;
-      };
+<!-- Bootstrap CSS -->
+<link rel="stylesheet" href="static/bootstrap-4.5.2.min.css" />
 
-      const print = function(msg) {
-        history.push(msg);
-        update_output();
-      }
+<!-- jQuery first, then Popper.js, then Bootstrap JS -->
+<script src="static/jquery-3.5.1.slim.min.js"></script>
+<script src="static/popper-1.16.1.min.js"></script>
+<script src="static/bootstrap-4.5.2.min.js"></script>
 
-      const open = function(evt) {
-        if (ws) {
-          return false;
-        }
-        ws = new WebSocket("{{.WsAddr}}");
-        ws.onopen = function(evt) {
-          print("OPEN");
-        }
-        ws.onclose = function(evt) {
-          print("CLOSE");
-          ws = null;
-        }
-        ws.onmessage = function(evt) {
-          print("RESPONSE: " + evt.data);
-        }
-        ws.onerror = function(evt) {
-          print("ERROR: " + evt.data);
-        }
-        return false;
-      };
+<style>
+#status_alert {
+  padding-top: 0.2rem;
+  padding-bottom: 0.3rem;
+  margin-bottom: 0rem;
+}
+</style>
 
-      const close = function(evt) {
-        if (!ws) {
-          return false;
-        }
-        ws.close();
-        return false;
-      };
+<script>
+window.addEventListener("load", (event) => {
+  var ws;
+  const text_log = document.getElementById("text-log");
+  const text_input = document.getElementById("text-input");
+  const status_alert = document.getElementById("status_alert");
+  const status_msg = document.getElementById("status_msg");
+  const history = [];
+  const display_max = 1000;
 
-      const send = function(msg) {
-        if (!ws) {
-          return false;
-        }
-        ws.send(msg);
-        return true;
-      }
+  const update_log = function() {
+    const start = Math.max(0, history.length - display_max);
+    const tail = history.slice(start, start + display_max);
+    text_log.value = tail.join("\n");
+    text_log.scrollTop = text_log.scrollHeight;
+  };
 
-      document.getElementById("send").onclick = function(evt) {
-        send(input.value);
-        return false;
-      };
-      document.getElementById("close").onclick = close;
-      document.getElementById("open").onclick = open;
+  const print = (msg) => {
+    history.push(msg);
+    update_log();
+  }
 
-      open();
-    });
-  </script>
+  const connection_status= {
+    CONNECTING: 'connecting',
+    OK: 'ok',
+    CLOSED: 'closed',
+  }
+  let status = null;
+  const update_connection_status = (new_status) => {
+    if (status != null && status == new_status) {
+      return;
+    }
+    switch (status) {
+    case connection_status.CONNECTING:
+      status_alert.classList.remove('alert-warning');
+      break;
+    case connection_status.OK:
+      status_alert.classList.remove('alert-primary');
+      break;
+    case connection_status.CLOSED:
+      status_alert.classList.remove('alert-danger');
+      break;
+    }
+    status = new_status;
+    switch (status) {
+    case connection_status.CONNECTING:
+      status_alert.classList.add('alert-warning');
+      status_msg.textContent = "Status: opening connection to {{.HostName}}..."
+      break;
+    case connection_status.OK:
+      status_alert.classList.add('alert-primary');
+      status_msg.textContent = "Status: connected to {{.HostName}} ✓"
+      break;
+    case connection_status.CLOSED:
+      status_alert.classList.add('alert-danger');
+      status_msg.textContent = "Status: lost connection to {{.HostName}}, will retry..."
+      break;
+    }
+  }
+
+  const open = (event) => {
+    if (ws) {
+      return false;
+    }
+    update_connection_status(connection_status.CONNECTING);
+    ws = new WebSocket("{{.WsAddr}}");
+    ws.onopen = function(event) {
+      update_connection_status(connection_status.OK);
+    }
+    ws.onclose = function(event) {
+      update_connection_status(connection_status.CLOSED);
+      ws = null;
+      const retryMs = 1000 + (Math.random() * 2000);
+      setTimeout(open, retryMs);
+    }
+    ws.onmessage = function(event) {
+      print(event.data);
+    }
+    return false;
+  };
+
+  const send = (msg) => {
+    console.log('send called with: ', msg);
+    if (!ws) {
+      return false;
+    }
+    ws.send(msg);
+    return true;
+  }
+
+  document.getElementById("button-send").onclick = (event) => {
+    send(text_input.value);
+    return false;
+  };
+
+  text_input.addEventListener('keyup', ({key}) => {
+    if (key === "Enter") {
+      console.log('keyup: pressed Enter');
+      send(text_input.value);
+      return true;
+    }
+    return false;
+  });
+
+  open();
+});
+</script>
 </head>
 <body>
+<div class="container-fluid">
 
-  <!-- jQuery first, then Popper.js, then Bootstrap JS -->
-  <script src="static/jquery-3.5.1.slim.min.js"></script>
-  <script src="static/popper-1.16.1.min.js"></script>
-  <script src="static/bootstrap-4.5.2.min.js"></script>
-
-  <div class="container">
-    <h2>{{.AppBase}}</h2>
-  <div class="row">
-    <div class="col">
-      Click "Open" to create a connection to the server, "Send" to send a message to the server and "Close" to close the connection. You can change the message and send multiple times.
-      <form>
-        <button class="btn btn-primary" id="open">Open</button>
-        <button class="btn btn-primary" id="close">Close</button>
-        <input id="input" type="text" class="form-control"/>
-        <button id="send" class="btn btn-secondary" type="button">Send</button>
-      </form>
-    </div>
-  </div>
-
-  <div class="row">
-    <div class="col">
-      <div class="form-group">
-        <label for="output">Large textarea</label>
-        <textarea class="form-control rounded-0" id="output" rows="10"></textarea>
+<div class="row">
+  <div class="col">
+    <div class="d-flex align-items-center justify-content-between">
+      <h2>{{.AppBase}}</h2>
+      <div id="status_alert" class="alert alert-primary" role="alert">
+        <small id="status_msg">Connection Status: Connecting...</small>
       </div>
     </div>
   </div>
-  </div>
+</div>
 
+<div class="row">
+  <div class="col-8">
+    <div class="input-group mb-3">
+      <input id="text-input" class="form-control" type="text" aria-describedby="button-send">
+      <div class="input-group-append">
+        <button id="button-send" class="btn btn-primary" type="button">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <div class="form-group">
+      <textarea class="form-control rounded-0" id="text-log" rows="10"></textarea>
+    </div>
+  </div>
+</div>
+
+</div>
 </body>
 </html>
