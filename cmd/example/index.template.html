@@ -37,7 +37,7 @@
   window.addEventListener('load', (event) => {
     const dlog = function(...args) {
       // comment out to disable debug logs
-      console.log(...args);
+      //console.log(...args);
     }
 
     var ws;
@@ -79,6 +79,49 @@
       }
     };
 
+    function makeWord(startsWithCaps) {
+      const rando = Math.random();
+      let word = '';
+      if (rando < 0.05) {
+        const words = ['a','ab','ad','an','be','I','in','me','no','to'];
+        word = words[Math.floor(Math.random() * words.length)];
+      } else {
+        let len = 0;
+        if (rando < 0.15) {
+          len = 3;
+        } else if (rando < 0.35) {
+          len = 4;
+        } else if (rando < 0.55) {
+          len = 5;
+        } else if (rando < 0.75) {
+          len = 6;
+        } else if (rando < 0.90) {
+          len = 7;
+        } else if (rando < 0.95) {
+          len = 8;
+        }
+        const chars = 'abcdefghijklmnopqrstuvwxyz';
+        for (let i = 0; i < len; i++) {
+          word += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+      }
+
+      if (startsWithCaps) {
+        word = word.charAt(0).toUpperCase() + word.slice(1);
+      }
+
+      return word;
+    }
+
+    function makeSentance() {
+      const len = Math.floor(Math.random()*20)+5;
+      const words = [];
+      for (let i = 0; i < len; i++) {
+        words.push(makeWord(i==0));
+      }
+      return words.join(' ');
+    }
+
     const derender_log = () => {
       let next = log_line_parent.firstElementChild;
       while (next) {
@@ -89,7 +132,14 @@
     };
 
     const update_log = () => {
-      dlog('update_log', {display_max, history_length:history.length});
+      dlog('update_log', {
+        display_max, history_length:history.length,
+        scrollHeight:scroll_parent.scrollHeight,
+        scrollTop:scroll_parent.scrollTop,
+        clientHeight:scroll_parent.clientHeight,
+      });
+
+      const wasAtBottom = (scroll_parent.scrollHeight <= (scroll_parent.scrollTop + scroll_parent.clientHeight));
 
       const start = Math.max(0, history.length - display_max);
       const end = Math.min(history.length, start + display_max);
@@ -106,7 +156,7 @@
         last = parseInt(lastChild.id.replace('log-line-', ''), 10) + 1;
       }
 
-      dlog('update_log', {first, last, start, end});
+      dlog('update_log', {first, last, start, end, wasAtBottom});
 
       // remove lines we no longer wish to see
       for (let i = first; i < last; i++) {
@@ -204,6 +254,14 @@
           log_line_parent.insertBefore(row, ePrev.nextSibling);
         }
         ePrev = row;
+      }
+
+      if (wasAtBottom) {
+        const isAtBottom = (scroll_parent.scrollHeight <= (scroll_parent.scrollTop + scroll_parent.clientHeight));
+        dlog('was at bottom:', {isAtBottom});
+        if (!isAtBottom) {
+          scroll_parent.scrollTo(0, scroll_parent.scrollHeight - scroll_parent.clientHeight);
+        }
       }
 
     }
@@ -335,11 +393,23 @@
       return false;
     });
 
+    window.addEventListener('scroll', function() {
+      dlog(`window scroll event: ${window.pageYOffset + 'px'}`);
+    });
+
+    const scroll_parent = document.getElementById('scroll-parent')
+    scroll_parent.onscroll = (event) => {
+      dlog(`scroll-parent onscroll event: scrollHeight=${scroll_parent.scrollHeight}, scrollTop=${scroll_parent.scrollTop}, clientHeight=${scroll_parent.clientHeight}`);
+    }
+
     /** Init **/
 
     open();
 
     add_to_history({date:new Date(Date.now()), level:'info', msg:'----- Start of History -----'});
+    for (let i = 0; i < 20; i++) {
+      add_to_history({date:new Date(Date.now()), level:'info', msg:makeSentance()});
+    }
     update_log();
 
   });
@@ -367,7 +437,7 @@
           <small id="status_msg">Javascript not running</small>
         </div>
 
-        <h2 class="font-size-16 mb-5">Log Lines</h2>
+        <h2 class="font-size-16 mt-20 mb-5">Log Lines</h2>
 
         <div class="input-group">
           <div class="input-group-prepend">
@@ -383,7 +453,7 @@
           <input id="input-num-visible" type="text" value="1000" class="form-control">
         </div>
 
-        <h2 class="font-size-16 mb-5">Columns</h2>
+        <h2 class="font-size-16 mt-20 mb-5">Columns</h2>
 
         <div class="custom-switch mb-5">
           <input type="checkbox" id="switch-show-line" value="">
@@ -400,7 +470,7 @@
           <label for="switch-show-level">Show Log Level</label>
         </div>
 
-        <h2 class="font-size-16 mb-5">Debug</h2>
+        <h2 class="font-size-16 mt-20 mb-5">Debug</h2>
 
         <div class="input-group">
           <input id="input-test" type="text" value="Test Message" class="form-control">
@@ -412,7 +482,7 @@
     <!-- Sidebar end -->
 
     <!-- Content wrapper start -->
-    <div class="content-wrapper">
+    <div id="scroll-parent" class="content-wrapper">
       <div class="container-fluid">
         <div id="log-line-parent" class="content">
         </div>
