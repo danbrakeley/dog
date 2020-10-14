@@ -6,34 +6,32 @@ mkdir -p local
 
 if ! command -v go &> /dev/null
 then
-  echo "Could not find go. Make sure it is installed and in your path."
+  echo "could not find go. Make sure it is installed and in your path."
   exit 1
 fi
 
-echo "updating bpak..."
+echo "Updating bpak..."
 go install ./cmd/bpak
 
 if ! command -v bpak &> /dev/null
 then
-  echo "Could not find bpak after installing it. Make sure your \$GOPATH/bin is in your path."
+  echo "could not find bpak after installing it. Make sure your \$GOPATH/bin is in your path."
   exit 1
 fi
 
-echo "generating..."
+echo "Generating..."
 go generate
 
-echo "testing..."
+echo "Testing..."
 go test ./...
 
-echo "building example..."
+echo "Building example..."
 exename=example
 if [[ "$OSTYPE" == "cygwin" ]]; then
-  # POSIX compatibility layer and Linux environment emulation for Windows
   exename=example.exe
 elif [[ "$OSTYPE" == "msys" ]]; then
-  # Lightweight shell and GNU utilities compiled for Windows (part of MinGW)
   exename=example.exe
 fi
 go build -o local/$exename ./cmd/example
 
-echo "success!"
+echo "Done"

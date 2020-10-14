@@ -37,7 +37,7 @@
   window.addEventListener('load', (event) => {
     const dlog = function(...args) {
       // comment out to disable debug logs
-      //console.log(...args);
+      console.log(...args);
     }
 
     var ws;
@@ -78,49 +78,6 @@
         document.getSelection().addRange(selected);   // Restore the original selection
       }
     };
-
-    function makeWord(startsWithCaps) {
-      const rando = Math.random();
-      let word = '';
-      if (rando < 0.05) {
-        const words = ['a','ab','ad','an','be','I','in','me','no','to'];
-        word = words[Math.floor(Math.random() * words.length)];
-      } else {
-        let len = 0;
-        if (rando < 0.15) {
-          len = 3;
-        } else if (rando < 0.35) {
-          len = 4;
-        } else if (rando < 0.55) {
-          len = 5;
-        } else if (rando < 0.75) {
-          len = 6;
-        } else if (rando < 0.90) {
-          len = 7;
-        } else if (rando < 0.95) {
-          len = 8;
-        }
-        const chars = 'abcdefghijklmnopqrstuvwxyz';
-        for (let i = 0; i < len; i++) {
-          word += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-      }
-
-      if (startsWithCaps) {
-        word = word.charAt(0).toUpperCase() + word.slice(1);
-      }
-
-      return word;
-    }
-
-    function makeSentance() {
-      const len = Math.floor(Math.random()*20)+5;
-      const words = [];
-      for (let i = 0; i < len; i++) {
-        words.push(makeWord(i==0));
-      }
-      return words.join(' ');
-    }
 
     const derender_log = () => {
       let next = log_line_parent.firstElementChild;
@@ -217,11 +174,11 @@
           colDateRef.classList.add(textColorOverride ? textColorOverride : 'text-muted');
           colDateRef.classList.add('text-decoration-none');
           colDateRef.href = 'no-javascript.html';
-          colDateRef.title = `${h.date.toDateString()}, ${h.date.toTimeString()}\n`+
+          colDateRef.title = `${h.timestamp.toDateString()}, ${h.timestamp.toTimeString()}\n`+
             '-- click to copy ISO 8601 timestamp to clipboard --';
-          colDateRef.appendChild(document.createTextNode(fmt_time(h.date)));
+          colDateRef.appendChild(document.createTextNode(fmt_time(h.timestamp)));
           colDateRef.onclick = () => {
-            copyToClipboard(h.date.toISOString());
+            copyToClipboard(h.timestamp.toISOString());
             return false;
           }
           colDate.appendChild(colDateRef);
@@ -266,17 +223,25 @@
 
     }
 
-    const add_to_history = ({date, level, msg}) => {
-      if (!date) {
-        date = new Date(Date.now());
-      }
-      if (!level) {
-        level = '???';
-      }
-
+    const process_remote_event = (e) => {
       history.push({
         visible: true,
-        date: date,
+        received: new Date(Date.now()),
+        timestamp: new Date(e.timestamp),
+        level: e.level,
+        msg: e.msg,
+      });
+
+      dlog('### processed', history[history.length-1]);
+
+      input_history_len.value = history.length;
+    }
+
+    const add_to_history = ({date, level, msg}) => {
+      history.push({
+        visible: true,
+        received: new Date(Date.now()),
+        timestamp: date,
         level: level,
         msg: msg,
       });
@@ -341,7 +306,9 @@
       }
       ws.onmessage = function(event) {
         dlog('websocket message received');
-        add_to_history({date:new Date(Date.now()), level:'info', msg:event.data});
+        let obj = JSON.parse(event.data)
+        dlog('-- parsed json: ', obj);
+        process_remote_event(obj);
         update_log();
       }
       return false;
@@ -407,9 +374,6 @@
     open();
 
     add_to_history({date:new Date(Date.now()), level:'info', msg:'----- Start of History -----'});
-    for (let i = 0; i < 20; i++) {
-      add_to_history({date:new Date(Date.now()), level:'info', msg:makeSentance()});
-    }
     update_log();
 
   });
