@@ -8,6 +8,8 @@ Running `build-dev.sh` will build/install the `bpak` generator, run `go generate
 
 ## TODO
 
+- ~~cleanup http server and any open connections on Close()~~
+- add visually distinct formatting for fatal log lines
 - Instead of mirroring frog's interface, maybe make it a module that requires frog to work?
 - Add options to periodically send memory/gc stats to the web viewer
   - maybe a generic system for adding named fields and displaying them on the sidebar?

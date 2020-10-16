@@ -27,33 +27,35 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 4096,
 }
 
-// CET is Client Event Type
-type CET uint8
+type clientEventType uint8
 
 const (
-	CETClose CET = iota
-	CETSend
+	cetClose clientEventType = iota
+	cetSend
 )
 
-type WsClientEvent struct {
-	Type    CET
-	Payload []byte
+type wsClientEvent struct {
+	cet     clientEventType
+	payload []byte
 }
 
 // WsClient holds the open connection to individual websocket clients.
+// It manages reading, writing, and lifetime.
 type WsClient struct {
 	conn    *websocket.Conn
 	owner   *WsRouter
-	send    chan WsClientEvent
+	chSend  chan wsClientEvent
+	chDead  chan struct{}
 	wgRead  sync.WaitGroup
 	wgWrite sync.WaitGroup
 }
 
 func CreateWsClient(conn *websocket.Conn, owner *WsRouter) *WsClient {
 	c := &WsClient{
-		conn:  conn,
-		owner: owner,
-		send:  make(chan WsClientEvent),
+		conn:   conn,
+		owner:  owner,
+		chSend: make(chan wsClientEvent),
+		chDead: make(chan struct{}),
 	}
 
 	c.wgWrite.Add(1)
@@ -74,32 +76,40 @@ func CreateWsClient(conn *websocket.Conn, owner *WsRouter) *WsClient {
 		}
 	}()
 
-	owner.register <- c
 	return c
 }
 
 // Send is a thread-safe call to send a message to this client.
-// Calling Send after ShutDown will panic.
+// Send will nop if called after client begins shutting down.
 func (c *WsClient) Send(msg []byte) {
-	c.send <- WsClientEvent{Type: CETSend, Payload: msg}
+	c.sendEvent(cetSend, msg)
 }
 
-// Close breaks the connection, waits for everything to halt, then updates the owner.
+// BeginShutDown requests that this client shut itself down.
+// BeginShutDown will nop if called after client begins shutting down.
 func (c *WsClient) BeginShutDown() {
-	fmt.Println("----- WsClient sending CETClose (begin shut down)")
-	c.send <- WsClientEvent{Type: CETClose, Payload: nil}
+	c.sendEvent(cetClose, nil)
+}
+
+func (c *WsClient) sendEvent(cet clientEventType, payload []byte) {
+	select {
+	case <-c.chDead:
+		// If chDone is closed, then chSend will never be serviced.
+	case c.chSend <- wsClientEvent{cet: cet, payload: payload}:
+	}
 }
 
 // Close breaks the connection, waits for everything to halt, then updates the owner.
 func (c *WsClient) WaitForShutDown() {
-	fmt.Println("----- WsClient.WatiForShutdown waiting for write pump")
+	// the write pump waits for the read pump to end before ending itself, so just wait for that.
 	c.wgWrite.Wait()
-	fmt.Println("----- WsClient.WatiForShutdown done")
 }
 
 func (c *WsClient) readPump() error {
 	defer func() {
-		fmt.Println("----- client read pump shutting down")
+		// If this pump is ending due to a connection error, then trigger a shutdown.
+		// If the shutdown triggered the end of the read pump, this will nop.
+		// Either way, the read pump has to go down before the write pump can end.
 		c.BeginShutDown()
 	}()
 
@@ -110,11 +120,16 @@ func (c *WsClient) readPump() error {
 		return nil
 	})
 
-	// Start endless read loop, waiting for messages from client
 	for {
 		mtype, msg, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+			ignoreErr := websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway)
+			select {
+			case <-c.chDead:
+				ignoreErr = true
+			default:
+			}
+			if ignoreErr {
 				return nil
 			}
 			return fmt.Errorf("read message: %w", err)
@@ -127,11 +142,15 @@ func (c *WsClient) readPump() error {
 func (c *WsClient) writePump() error {
 	pingTimer := time.NewTicker(pingPeriod)
 	defer func() {
-		fmt.Println("----- client write pump shutting down")
 		pingTimer.Stop()
+		// mark this client as dead, so any requests or connection errors will be ignored during shutdown
+		close(c.chDead)
+		// if this connection isn't already dead, then kill it
 		c.conn.Close()
+		// read pump should die now that the connection is dead, so wait for it
 		c.wgRead.Wait()
-		c.owner.unregister <- c
+		// finally tell the owner we no longer exist
+		c.owner.HandleClientShutdown(c)
 	}()
 
 	for {
@@ -141,15 +160,15 @@ func (c *WsClient) writePump() error {
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return fmt.Errorf("error sending websocket ping: %w", err)
 			}
-		case evt := <-c.send:
-			switch evt.Type {
-			case CETClose:
-				fmt.Println("----- WsClient got CETClose")
+		case evt := <-c.chSend:
+			switch evt.cet {
+			case cetClose:
+				// write pump needs to cleanly shut itself down
 				return nil
-			case CETSend:
+			case cetSend:
 				// continue out of this switch
 			default:
-				panic(fmt.Errorf("WsClient encountered unknown CET %d", evt.Type))
+				return fmt.Errorf("WsClient encountered unknown cet %d", evt.cet)
 			}
 
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
@@ -159,7 +178,7 @@ func (c *WsClient) writePump() error {
 				return fmt.Errorf("error getting next websocket writer: %w", err)
 			}
 
-			if _, err := w.Write(evt.Payload); err != nil {
+			if _, err := w.Write(evt.payload); err != nil {
 				return fmt.Errorf("error sending websocket message: %w", err)
 			}
 

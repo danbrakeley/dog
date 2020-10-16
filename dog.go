@@ -66,7 +66,7 @@ func Create(host string) (*Dog, error) {
 
 		err := d.server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			fmt.Fprintf(os.Stderr, "[dog] http server thread died with error: %v", err)
+			fmt.Fprintf(os.Stderr, "[dog] http server thread died with error: %v\n", err)
 			return
 		}
 

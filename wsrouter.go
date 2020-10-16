@@ -7,45 +7,35 @@ import (
 	"sync"
 )
 
-// RET is Router Event Type
-type RET uint8
+type routerEventType uint8
 
 const (
-	RETClose RET = iota
-	RETBroadcast
+	retClose routerEventType = iota
+	retBroadcast
 )
 
 type WsRouterEvent struct {
-	Type    RET
+	Type    routerEventType
 	Payload []byte
 }
 
 type WsRouter struct {
-	chShuttingDown chan struct{}
-	clients        map[*WsClient]bool
-	register       chan *WsClient
-	unregister     chan *WsClient
-	chEvent        chan WsRouterEvent
-	wg             sync.WaitGroup
+	clients      map[*WsClient]bool
+	chRegister   chan *WsClient
+	chUnregister chan *WsClient
+	chEvent      chan WsRouterEvent
+	wgPump       sync.WaitGroup
+	chDead       chan struct{}
 }
 
 // NewWsRouter creates a new WsRouter type
 func NewWsRouter() *WsRouter {
 	return &WsRouter{
-		chShuttingDown: make(chan struct{}),
-		clients:        make(map[*WsClient]bool),
-		register:       make(chan *WsClient),
-		unregister:     make(chan *WsClient),
-		chEvent:        make(chan WsRouterEvent),
-	}
-}
-
-func (r *WsRouter) IsShuttingDown() bool {
-	select {
-	case <-r.chShuttingDown:
-		return true
-	default:
-		return false
+		clients:      make(map[*WsClient]bool),
+		chRegister:   make(chan *WsClient),
+		chUnregister: make(chan *WsClient),
+		chEvent:      make(chan WsRouterEvent),
+		chDead:       make(chan struct{}),
 	}
 }
 
@@ -53,11 +43,16 @@ func (r *WsRouter) IsShuttingDown() bool {
 func (r *WsRouter) ServeWs(w http.ResponseWriter, req *http.Request) {
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error upgrading connection to websocket: %v", err)
+		fmt.Fprintf(os.Stderr, "error upgrading connection to websocket: %v\n", err)
 		return
 	}
 
-	CreateWsClient(conn, r)
+	c := CreateWsClient(conn, r)
+	select {
+	case <-r.chDead:
+		c.BeginShutDown()
+	case r.chRegister <- c:
+	}
 }
 
 func (r *WsRouter) HandleClientMessage(c *WsClient, mt int, b []byte) {
@@ -66,40 +61,50 @@ func (r *WsRouter) HandleClientMessage(c *WsClient, mt int, b []byte) {
 }
 
 func (r *WsRouter) HandleClientError(c *WsClient, err error) {
-	fmt.Fprintf(os.Stderr, "error in websocket router: %v", err)
+	fmt.Fprintf(os.Stderr, "error in websocket router: %v\n", err)
+}
+
+func (r *WsRouter) HandleClientShutdown(c *WsClient) {
+	select {
+	case <-r.chDead:
+	case r.chUnregister <- c:
+	}
 }
 
 // Start our websocket router, accepting various requests
 func (r *WsRouter) Start() {
-	r.wg.Add(1)
+	r.wgPump.Add(1)
 	go func() {
 		isShuttingDown := false
-		defer r.wg.Done()
+		defer func() {
+			close(r.chDead)
+			r.wgPump.Done()
+		}()
 		for {
 		outerSelect:
 			select {
-			case client := <-r.register:
+			case c := <-r.chRegister:
 				if isShuttingDown {
-					// TODO: tell new client to shut down?
-					fmt.Printf("===== WsRouter register called during shutdown for client %v (ignored)\n", client)
+					c.BeginShutDown()
+					fmt.Printf("===== WsRouter register called during shutdown for client %v (ignored)\n", c)
 					break outerSelect
 				}
-				fmt.Printf("===== WsRouter registering client %v\n", client)
-				r.clients[client] = true
-			case client := <-r.unregister:
-				fmt.Printf("===== WsRouter ungeristering client %v\n", client)
-				if _, ok := r.clients[client]; ok {
-					delete(r.clients, client)
+				fmt.Printf("===== WsRouter registering client %v\n", c)
+				r.clients[c] = true
+			case c := <-r.chUnregister:
+				fmt.Printf("===== WsRouter ungeristering client %v\n", c)
+				if _, ok := r.clients[c]; ok {
+					delete(r.clients, c)
 				}
 				fmt.Printf("===== WsRouter len(clients) = %d\n", len(r.clients))
 				if len(r.clients) == 0 && isShuttingDown {
 					fmt.Println("===== WsRouter last client unregistered, so halt main loop")
-					client.WaitForShutDown()
+					c.WaitForShutDown()
 					return
 				}
 			case evt := <-r.chEvent:
 				switch evt.Type {
-				case RETClose:
+				case retClose:
 					if isShuttingDown {
 						break outerSelect
 					}
@@ -108,7 +113,7 @@ func (r *WsRouter) Start() {
 						fmt.Printf("===== WsRouter telling client %v to shut down\n", client)
 						client.BeginShutDown()
 					}
-				case RETBroadcast:
+				case retBroadcast:
 					if isShuttingDown {
 						break outerSelect
 					}
@@ -116,7 +121,7 @@ func (r *WsRouter) Start() {
 						client.Send(evt.Payload)
 					}
 				default:
-					panic(fmt.Errorf("WsRouter encountered unknown RET %d", evt.Type))
+					panic(fmt.Errorf("WsRouter encountered unknown ret %d", evt.Type))
 				}
 			}
 		}
@@ -124,16 +129,13 @@ func (r *WsRouter) Start() {
 }
 
 func (r *WsRouter) Broadcast(msg []byte) {
-	r.chEvent <- WsRouterEvent{Type: RETBroadcast, Payload: msg}
+	r.chEvent <- WsRouterEvent{Type: retBroadcast, Payload: msg}
 }
 
 func (r *WsRouter) BeginShutdown() {
-	fmt.Println("===== WsRouter sending RETClose (beginning shutdown)")
-	r.chEvent <- WsRouterEvent{Type: RETClose, Payload: nil}
+	r.chEvent <- WsRouterEvent{Type: retClose, Payload: nil}
 }
 
 func (r *WsRouter) WaitForShutdown() {
-	fmt.Println("===== WsRouter WaitForShutdown begin")
-	r.wg.Wait()
-	fmt.Println("===== WsRouter WaitForShutdown end")
+	r.wgPump.Wait()
 }
