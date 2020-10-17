@@ -170,7 +170,3 @@ func (d *Dog) handleHome(w http.ResponseWriter, r *http.Request) {
 		WsAddr:   "ws://" + r.Host + "/ws",
 	})
 }
-
-func (d *Dog) handleWSConnect(w http.ResponseWriter, r *http.Request) {
-
-}

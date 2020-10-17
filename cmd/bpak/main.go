@@ -12,7 +12,10 @@ import (
 	"strings"
 )
 
-var version = "0.2.3"
+// Revision History
+//    0.3.0 - changed how files are encoded from []byte of decimal numbers to string of \x and ascii
+
+var version = "0.3.0"
 
 type Vars struct {
 	RootPath   string
@@ -75,6 +78,7 @@ func bpakGen(vars *Vars) error {
 		return fmt.Errorf("error while walking %s: %w", vars.RootPath, err)
 	}
 
+	// max exists because bpak does everything in ram and is meant for relatively small html/css/js files
 	const max = 1024 * 1024 * 100
 	if total > max {
 		return fmt.Errorf("found %d bytes, which is currently outside the (somewhat arbitrary) max of %d", total, max)
@@ -125,7 +129,7 @@ func bpakGen(vars *Vars) error {
 
 	// build string to hold output
 	var sb strings.Builder
-	sb.Grow(int(total * 6))
+	sb.Grow(len(headerTemplate) + int(total*4) + len(footer))
 
 	// write header
 	err = tmpl.Execute(&sb, vars)
@@ -133,22 +137,20 @@ func bpakGen(vars *Vars) error {
 		return fmt.Errorf("error executing header template: %w", err)
 	}
 
-	// bytes per line
-	bpl := 32
-
-	// write raw bytes
-	for i := 0; i < len(allbytes); {
-		end := i + bpl
-		if end > len(allbytes) {
-			end = len(allbytes)
+	// encode raw bytes into a valid Go string
+	for _, b := range allbytes {
+		switch {
+		case (b >= 0x20 && b < 0x22) || (b > 0x22 && b < 0x5C) || (b > 0x5C && b <= 0x7D):
+			sb.WriteByte(b)
+		case b == 0x22:
+			sb.WriteByte(0x5C)
+			sb.WriteByte(0x22)
+		case b == 0x5C:
+			sb.WriteByte(0x5C)
+			sb.WriteByte(0x5C)
+		default:
+			sb.WriteString(fmt.Sprintf("\\x%02X", b))
 		}
-		sb.WriteString(fmt.Sprintf("\t%d", allbytes[i]))
-		i++
-		for i < end {
-			sb.WriteString(fmt.Sprintf(", %d", allbytes[i]))
-			i++
-		}
-		sb.WriteString(",\n")
 	}
 
 	// write footer
@@ -175,6 +177,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 )
 
 //  _                 _
@@ -193,16 +196,16 @@ func bpakGet(filename string) ([]byte, error) {
 	if filename[0] != '/' {
 		filename = fmt.Sprintf("/%s", filename)
 	}
-	var b []byte
+	var s string
 	var size int
 	switch filename {
 {{range .Files}}	case "{{.CleanName}}":
-		b = bpak_bytes[{{.Start}}:{{.End}}]
+		s = bpak_bytes[{{.Start}}:{{.End}}]
 		size = {{.Size}}
 {{end}}	default:
 		return []byte{}, fmt.Errorf("file not found: %s", filename)
 	}
-	zr, err := gzip.NewReader(bytes.NewReader(b))
+	zr, err := gzip.NewReader(strings.NewReader(s))
 	if err != nil {
 		return []byte{}, fmt.Errorf("unable to begin to decompress %s: %w", filename, err)
 	}
@@ -218,7 +221,6 @@ func bpakGet(filename string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-var bpak_bytes = []byte{
-`
-	footer = `}`
+var bpak_bytes = "`
+	footer = `"`
 )
