@@ -13,6 +13,7 @@
 
   <link href="static/halfmoon-variables-1.1.1.min.css" rel="stylesheet" />
   <script src="static/halfmoon-1.1.1.min.js"></script>
+  <script src="static/file-saver-2.0.4.js"></script>
 
   <style>
   /* Remove the "circle with slash" no icon for disabled fields */
@@ -118,25 +119,16 @@
       }
     };
 
-    // const saveHistoryToFile = () => {
-    //   const now = new Date(Date.now());
-
-    //   let appName = `{{.AppBase}}`.replace(/\.exe$/g, '');
-    //   if (appName.length < 1) {
-    //     appName = 'history';
-    //   }
-
-    //   const year = ''+now.getFullYear();
-    //   const month = now.getMonth()+1;
-    //   const paddedMonth = month < 10 ? '0'+month : ''+month;
-    //   const day = now.getDate();
-    //   const paddedDay = day < 10 ? '0'+day : ''+day;
-
-    //   window.saveAs(
-    //     new Blob([history.map(h => JSON.stringify(h.obj)).join('\n')], {type: "text/plain;charset=utf-8"}),
-    //     `${appName}-${year}.${paddedMonth}.${paddedDay}.ndjson`,
-    //   );
-    // }
+    const saveHistoryToFile = () => {
+      let appName = "{{.AppBase}}".replace(/\.exe$/, '');
+      if (appName.length < 1) {
+        appName = 'log';
+      }
+      const now = new Date(Date.now());
+      const dateAndTime = now.toISOString().substr(0, 16).replace(':', '.').replace(/-/g, '.').replace('T', '_');
+      const blob = new Blob([history.map(h => JSON.stringify(h.obj)).join('\n')], {type: "text/plain;charset=utf-8"});
+      saveAs(blob, `${appName}-${dateAndTime}.ndjson`);
+    }
 
     const clear_log_dom = () => {
       let next = log_line_parent.firstElementChild;
@@ -421,11 +413,11 @@
       return false;
     });
 
-    // document.getElementById('button-save').onclick = (event) => {
-    //   dlog('button-save clicked', event);
-    //   saveHistoryToFile();
-    //   return false;
-    // }
+    document.getElementById('button-save').onclick = (event) => {
+      dlog('button-save clicked', event);
+      saveHistoryToFile();
+      return false;
+    }
 
     document.getElementById('button-test').onclick = (event) => {
       dlog('button-test clicked', event);
@@ -482,7 +474,7 @@
           <small id="status_msg">Javascript not running</small>
         </div>
 
-        <!-- <button id="button-save" class="btn btn-primary" type="button">Save Log to File...</button> -->
+        <button id="button-save" class="btn btn-primary btn-block" type="button">Save Log to File...</button>
 
         <h2 class="font-size-16 mt-20 mb-5">Log Lines</h2>
 

@@ -10,10 +10,11 @@ Running `build-dev.sh` will build/install the `bpak` generator, run `go generate
 
 - ~~cleanup http server and any open connections on Close()~~
 - ~~add visually distinct formatting for fatal log lines~~
-- save captured logs to text ndjson file
-- add toggles for log levels
-- display structured data
+- ~~save captured logs to text ndjson file~~
+- ~~add toggles for log levels~~
 - add simple text filter (or regex?)
+- display structured data
+- rework filter and visible count to make more sense
 - add multiple filters that can be quickly switched between
 - add date range filter?
 - Instead of mirroring frog's interface, maybe make it a module that requires frog to work?
