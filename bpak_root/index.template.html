@@ -15,6 +15,7 @@
   <script src="static/halfmoon-1.1.1.min.js"></script>
 
   <style>
+  /* Remove the "circle with slash" no icon for disabled fields */
   .form-control.disabled,
   .form-control:disabled,
   .form-control.disabled:hover,
@@ -24,6 +25,7 @@
       color: var(--input-text-color);
   }
 
+  /* Log line formatting */
   .fixed-width-font {
     font-family: SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
     font-size: var(--code-font-size);
@@ -31,6 +33,36 @@
   .smaller-font-size {
     font-size: var(--code-font-size);
   }
+
+  /* Color tweaks */
+
+  body:not(.dark-mode) {
+    --lm-base-body-bg-color: #E3E5E8;
+    --lm-sidebar-bg-color: #F2F3F5;
+  }
+
+  /* Log line text by level - dark mode */
+  .dark-mode .row-text-transient { color: var(--dm-muted-text-color) !important; }
+  .dark-mode .row-text-verbose   { color: var(--dm-muted-text-color) !important; }
+  .dark-mode .row-text-info      { color: var(--dm-base-text-color) !important; }
+  .dark-mode .row-text-warning   { color: var(--secondary-color) !important; }
+  .dark-mode .row-text-error     { color: var(--danger-color) !important; }
+  .dark-mode .row-text-fatal     { color: var(--danger-color) !important; }
+  /* Log line row highlights - dark mode */
+  .dark-mode .row-fatal { background-color: var(--dark-color-dark); border-radius: 10px; }
+
+  /* Log line text by level - light mode */
+  body:not(.dark-mode) .row-text-transient { color: var(--lm-muted-text-color) !important; }
+  body:not(.dark-mode) .row-text-verbose   { color: var(--lm-muted-text-color) !important; }
+  body:not(.dark-mode) .row-text-info      { color: var(--lm-base-text-color) !important; }
+  body:not(.dark-mode) .row-text-warning   { color: var(--lm-base-text-color) !important; }
+  body:not(.dark-mode) .row-text-error     { color: var(--lm-base-text-color) !important; }
+  body:not(.dark-mode) .row-text-fatal     { color: var(--lm-base-text-color) !important; }
+  /* Log line row highlights - light mode */
+  body:not(.dark-mode) .row-warning { background-color: #FFFF0030; border-radius: 10px; }
+  body:not(.dark-mode) .row-error   { background-color: #FF000030; border-radius: 10px; }
+  body:not(.dark-mode) .row-fatal   { background-color: #FF000080; border-radius: 10px; }
+
   </style>
   
   <script>
@@ -45,9 +77,16 @@
     const status_msg = document.getElementById('status_msg');
     const input_history_len = document.getElementById('input-history-len');
     const input_num_visible = document.getElementById('input-num-visible');
-    const switch_show_line = document.getElementById('switch-show-line');
-    const switch_show_timestamp = document.getElementById('switch-show-timestamp');
-    const switch_show_level = document.getElementById('switch-show-level');
+    const switches = {
+      show_line: document.getElementById('switch-show-line'),
+      show_timestamp: document.getElementById('switch-show-timestamp'),
+      show_level: document.getElementById('switch-show-level'),
+      filter_transient: document.getElementById('switch-filter-transient'),
+      filter_verbose: document.getElementById('switch-filter-verbose'),
+      filter_info: document.getElementById('switch-filter-info'),
+      filter_warning: document.getElementById('switch-filter-warning'),
+      filter_error: document.getElementById('switch-filter-error'),
+    }
     const input_test = document.getElementById('input-test');
     const log_line_parent = document.getElementById('log-line-parent');
     const history = [];
@@ -63,10 +102,10 @@
       const el = document.createElement('textarea');  // Create a <textarea> element
       el.value = str;                                 // Set its value to the string that you want copied
       el.setAttribute('readonly', '');                // Make it readonly to be tamper-proof
-      el.style.position = 'absolute';                 
+      el.style.position = 'absolute';
       el.style.left = '-9999px';                      // Move outside the screen to make it invisible
       document.body.appendChild(el);                  // Append the <textarea> element to the HTML document
-      const selected =            
+      const selected =
         document.getSelection().rangeCount > 0        // Check if there is any content selected previously
           ? document.getSelection().getRangeAt(0)     // Store selection if found
           : false;                                    // Mark as false to know no selection existed before
@@ -79,7 +118,27 @@
       }
     };
 
-    const derender_log = () => {
+    // const saveHistoryToFile = () => {
+    //   const now = new Date(Date.now());
+
+    //   let appName = `{{.AppBase}}`.replace(/\.exe$/g, '');
+    //   if (appName.length < 1) {
+    //     appName = 'history';
+    //   }
+
+    //   const year = ''+now.getFullYear();
+    //   const month = now.getMonth()+1;
+    //   const paddedMonth = month < 10 ? '0'+month : ''+month;
+    //   const day = now.getDate();
+    //   const paddedDay = day < 10 ? '0'+day : ''+day;
+
+    //   window.saveAs(
+    //     new Blob([history.map(h => JSON.stringify(h.obj)).join('\n')], {type: "text/plain;charset=utf-8"}),
+    //     `${appName}-${year}.${paddedMonth}.${paddedDay}.ndjson`,
+    //   );
+    // }
+
+    const clear_log_dom = () => {
       let next = log_line_parent.firstElementChild;
       while (next) {
         let cur = next;
@@ -88,8 +147,8 @@
       }
     };
 
-    const update_log = () => {
-      dlog('update_log', {
+    const update_log_dom = () => {
+      dlog('update_log_dom', {
         display_max, history_length:history.length,
         scrollHeight:scroll_parent.scrollHeight,
         scrollTop:scroll_parent.scrollTop,
@@ -113,7 +172,7 @@
         last = parseInt(lastChild.id.replace('log-line-', ''), 10) + 1;
       }
 
-      dlog('update_log', {first, last, start, end, wasAtBottom});
+      dlog('update_log_dom', {first, last, start, end, wasAtBottom});
 
       // remove lines we no longer wish to see
       for (let i = first; i < last; i++) {
@@ -150,35 +209,35 @@
         let row = document.createElement('div');
         row.id = `log-line-${i}`;
         row.classList.add('row');
+        row.classList.add(`row-${h.obj.level}`);
 
         let colMsgWidth = 12;
-        let textColorOverride = (h.level == 'error' ? 'text-danger' : (h.level == 'warning' ? 'text-secondary' : ''));
 
-        if (switch_show_line.checked) {
+        if (switches.show_line.checked) {
           let colNum = document.createElement('div');
           colNum.classList.add('col-1');
           colNum.classList.add('text-center');
           colNum.classList.add('fixed-width-font');
-          if (textColorOverride) { colNum.classList.add(textColorOverride); }
+          colNum.classList.add(`row-text-${h.obj.level}`);
           colNum.appendChild(document.createTextNode(i+1));
           row.appendChild(colNum);
           colMsgWidth -= 1;
         }
 
-        if (switch_show_timestamp.checked) {
+        if (switches.show_timestamp.checked) {
           let colDate = document.createElement('div');
           colDate.classList.add(`col-1`);
           colDate.classList.add('text-center');
           colDate.classList.add('fixed-width-font');
           let colDateRef = document.createElement('a');
-          colDateRef.classList.add(textColorOverride ? textColorOverride : 'text-muted');
+          colDateRef.classList.add(`row-text-${h.obj.level}`);
           colDateRef.classList.add('text-decoration-none');
           colDateRef.href = 'no-javascript.html';
-          colDateRef.title = `${h.timestamp.toDateString()}, ${h.timestamp.toTimeString()}\n`+
+          colDateRef.title = `${h.date.toDateString()}, ${h.date.toTimeString()}\n`+
             '-- click to copy ISO 8601 timestamp to clipboard --';
-          colDateRef.appendChild(document.createTextNode(fmt_time(h.timestamp)));
+          colDateRef.appendChild(document.createTextNode(fmt_time(h.date)));
           colDateRef.onclick = () => {
-            copyToClipboard(h.timestamp.toISOString());
+            copyToClipboard(h.date.toISOString());
             return false;
           }
           colDate.appendChild(colDateRef);
@@ -186,13 +245,13 @@
           colMsgWidth -= 1;
         }
 
-        if (switch_show_level.checked) {
+        if (switches.show_level.checked) {
           let colLevel = document.createElement('div');
           colLevel.classList.add('col-1');
           colLevel.classList.add('text-center');
           colLevel.classList.add('fixed-width-font');
-          colLevel.classList.add(textColorOverride ? textColorOverride : 'text-muted');
-          colLevel.appendChild(document.createTextNode(h.level));
+          colLevel.classList.add(`row-text-${h.obj.level}`);
+          colLevel.appendChild(document.createTextNode(h.obj.level));
           row.appendChild(colLevel);
           colMsgWidth -= 1;
         }
@@ -200,8 +259,8 @@
         let colMsg = document.createElement('div');
         colMsg.classList.add(`col-${colMsgWidth}`);
         colMsg.classList.add('fixed-width-font');
-        if (textColorOverride) { colMsg.classList.add(textColorOverride); }
-        colMsg.appendChild(document.createTextNode(h.msg));
+        colMsg.classList.add(`row-text-${h.obj.level}`);
+        colMsg.appendChild(document.createTextNode(h.obj.msg));
         row.appendChild(colMsg);
 
         if (!ePrev) {
@@ -223,32 +282,37 @@
 
     }
 
-    const process_remote_event = (e) => {
-      history.push({
-        visible: true,
-        received: new Date(Date.now()),
-        timestamp: new Date(e.timestamp),
-        level: e.level,
-        msg: e.msg,
-      });
+    const matches_any_filter = (e) => {
+      if (switches.filter_transient.checked && e.obj.level=='transient') return true;
+      if (switches.filter_verbose.checked && e.obj.level=='verbose') return true;
+      if (switches.filter_info.checked && e.obj.level=='info') return true;
+      if (switches.filter_warning.checked && e.obj.level=='warning') return true;
+      if (switches.filter_error.checked && e.obj.level=='error') return true;
+      return false;
+    }
 
-      dlog('### processed', history[history.length-1]);
+    const add_to_history = (obj) => {
+      const e = {
+        visible: false,
+        date: new Date(obj.timestamp),
+        obj: obj,
+      }
+      e.visible = matches_any_filter(e);
+      history.push(e);
 
       input_history_len.value = history.length;
     }
 
-    const add_to_history = ({date, level, msg}) => {
-      history.push({
-        visible: true,
-        received: new Date(Date.now()),
-        timestamp: date,
-        level: level,
-        msg: msg,
-      });
-
-      input_history_len.value = history.length;
+    const recalculate_visibility = () => {
+      const count = Math.min(history.length, display_max);
+      const start = Math.max(0, history.length - count);
+      const end = start + count;
+      dlog('recalculate_visibility', {count, start, end});
+      for (let i = start; i < end; i++) {
+        history[i].visible = matches_any_filter(history[i]);
+      }
     }
-  
+
     const connection_status= {
       CONNECTING: 'connecting',
       OK: 'ok',
@@ -306,10 +370,10 @@
       }
       ws.onmessage = function(event) {
         dlog('websocket message received');
-        let obj = JSON.parse(event.data)
+        let obj = JSON.parse(event.data);
         dlog('-- parsed json: ', obj);
-        process_remote_event(obj);
-        update_log();
+        add_to_history(obj);
+        update_log_dom();
       }
       return false;
     };
@@ -327,23 +391,41 @@
     /** Input Handlers **/
 
     const switch_column = (event) => {
-      derender_log();
-      update_log();
+      clear_log_dom();
+      update_log_dom();
       return true;
     };
-    switch_show_line.onclick = switch_column;
-    switch_show_timestamp.onclick = switch_column;
-    switch_show_level.onclick = switch_column;
+    switches.show_line.onclick = switch_column;
+    switches.show_timestamp.onclick = switch_column;
+    switches.show_level.onclick = switch_column;
+
+    const switch_filter = (event) => {
+      recalculate_visibility();
+      update_log_dom();
+      return true;
+    };
+    switches.filter_transient.onclick = switch_filter;
+    switches.filter_verbose.onclick = switch_filter;
+    switches.filter_info.onclick = switch_filter;
+    switches.filter_warning.onclick = switch_filter;
+    switches.filter_error.onclick = switch_filter;
 
     input_num_visible.addEventListener('keyup', ({key}) => {
       if (key === 'Enter') {
         display_max = parseInt(input_num_visible.value, 10);
         input_num_visible.value = display_max;
-        update_log();
+        recalculate_visibility();
+        update_log_dom();
         return true;
       }
       return false;
     });
+
+    // document.getElementById('button-save').onclick = (event) => {
+    //   dlog('button-save clicked', event);
+    //   saveHistoryToFile();
+    //   return false;
+    // }
 
     document.getElementById('button-test').onclick = (event) => {
       dlog('button-test clicked', event);
@@ -352,7 +434,6 @@
     };
   
     input_test.addEventListener('keyup', ({key}) => {
-      dlog('keyup: pressed a key', key);
       if (key === 'Enter') {
         send(input_test.value);
         return true;
@@ -373,8 +454,8 @@
 
     open();
 
-    add_to_history({date:new Date(Date.now()), level:'info', msg:'----- Start of History -----'});
-    update_log();
+    add_to_history({timestamp:new Date(Date.now()).toISOString(), level:'info', msg:'----- Start of History -----'});
+    update_log_dom();
 
   });
   </script>
@@ -400,6 +481,8 @@
         <div id="status_alert" class="alert mb-10" role="alert">
           <small id="status_msg">Javascript not running</small>
         </div>
+
+        <!-- <button id="button-save" class="btn btn-primary" type="button">Save Log to File...</button> -->
 
         <h2 class="font-size-16 mt-20 mb-5">Log Lines</h2>
 
@@ -432,6 +515,29 @@
         <div class="custom-switch mb-5">
           <input type="checkbox" id="switch-show-level" value="" checked='checked'>
           <label for="switch-show-level">Show Log Level</label>
+        </div>
+
+        <h2 class="font-size-16 mt-20 mb-5">Filters</h2>
+
+        <div class="custom-switch mb-5">
+          <input type="checkbox" id="switch-filter-transient" value="">
+          <label for="switch-filter-transient">Include Level Transient</label>
+        </div>
+        <div class="custom-switch mb-5">
+          <input type="checkbox" id="switch-filter-verbose" value="">
+          <label for="switch-filter-verbose">Include Level Verbose</label>
+        </div>
+        <div class="custom-switch mb-5">
+          <input type="checkbox" id="switch-filter-info" value="" checked='checked'>
+          <label for="switch-filter-info">Include Level Info</label>
+        </div>
+        <div class="custom-switch mb-5">
+          <input type="checkbox" id="switch-filter-warning" value="" checked='checked'>
+          <label for="switch-filter-warning">Include Level Warning</label>
+        </div>
+        <div class="custom-switch mb-5">
+          <input type="checkbox" id="switch-filter-error" value="" checked='checked'>
+          <label for="switch-filter-error">Include Level Error</label>
         </div>
 
         <h2 class="font-size-16 mt-20 mb-5">Debug</h2>
