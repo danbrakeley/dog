@@ -68,6 +68,7 @@
   
   <script>
   window.addEventListener('load', (event) => {
+    const index_hash = "{{.IndexHash}}";
     const dlog = function(...args) {
       // comment out to disable debug logs
       console.log(...args);
@@ -414,8 +415,26 @@
         setTimeout(open, retryMs);
       }
       ws.onmessage = function(event) {
-        dlog('websocket message received');
-        add_to_history_and_update_dom(JSON.parse(event.data));
+        let obj = JSON.parse(event.data);
+        dlog('websocket message received', obj);
+
+        // these must stay in sync with clientSendType consts listed in wsclient.go
+        const msgTypeInit = 0;
+        const msgTypeLog = 1;
+
+        switch (obj.t) {
+        case msgTypeInit:
+          // get hash, and compare to self
+          if (obj.m.index_hash != index_hash) {
+            dlog('HASH MISMATCH, TRIGGING PAGE RELOAD', {local:index_hash, remote:obj.m.index_hash});
+            // reload (from server)
+            window.location.reload(true);
+          }
+          break;
+        case msgTypeLog:
+          add_to_history_and_update_dom(obj.m);
+          break;
+        }
       }
       return false;
     };

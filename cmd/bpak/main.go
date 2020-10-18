@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -14,8 +17,9 @@ import (
 
 // Revision History
 //    0.3.0 - changed how files are encoded from []byte of decimal numbers to string of \x and ascii
+//    0.4.0 - added sha256 hash for each file
 
-var version = "0.3.0"
+var version = "0.4.0"
 
 type Vars struct {
 	RootPath   string
@@ -29,6 +33,7 @@ type FileEntry struct {
 	RelativePath string
 	CleanName    string
 	Size         int64
+	Hash         string
 	Start        int
 	End          int
 }
@@ -101,13 +106,25 @@ func bpakGen(vars *Vars) error {
 		// compress bytes
 		var buf bytes.Buffer
 		buf.Grow(int(e.Size))
+
+		// first writer (gzip)
 		zw := gzip.NewWriter(&buf)
-		if _, err := zw.Write(b); err != nil {
+
+		// second writer (hash)
+		h := sha256.New()
+
+		// target both writers at the same time
+		mw := io.MultiWriter(zw, h)
+		if _, err := mw.Write(b); err != nil {
 			return fmt.Errorf("error compressing %s: %w", e.RelativePath, err)
 		}
+
+		// flush the gzip buffer
 		if err := zw.Close(); err != nil {
 			return fmt.Errorf("error compressing %s: %w", e.RelativePath, err)
 		}
+
+		vars.Files[i].Hash = hex.EncodeToString(h.Sum(nil))
 
 		// copy bytes
 		zb := buf.Bytes()
@@ -219,6 +236,19 @@ func bpakGet(filename string) ([]byte, error) {
 		return []byte{}, fmt.Errorf("decompressed size of %s is %d, but expected %d", filename, n, size)
 	}
 	return out.Bytes(), nil
+}
+
+func bpakGetHash(filename string) (string, error) {
+	filename = filepath.ToSlash(filename)
+	if filename[0] != '/' {
+		filename = fmt.Sprintf("/%s", filename)
+	}
+	switch filename {
+{{range .Files}}	case "{{.CleanName}}":
+		return "{{.Hash}}", nil
+{{end}}	default:
+		return "", fmt.Errorf("file not found: %s", filename)
+	}
 }
 
 var bpak_bytes = "`

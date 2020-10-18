@@ -1,6 +1,7 @@
 package dog
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,10 +17,11 @@ const (
 
 type WsRouterEvent struct {
 	Type    routerEventType
-	Payload []byte
+	Payload json.RawMessage
 }
 
 type WsRouter struct {
+	indexHash    string // let's a connected client know when their cached web page is out of date
 	clients      map[*WsClient]bool
 	chRegister   chan *WsClient
 	chUnregister chan *WsClient
@@ -29,8 +31,9 @@ type WsRouter struct {
 }
 
 // NewWsRouter creates a new WsRouter type
-func NewWsRouter() *WsRouter {
+func NewWsRouter(indexHash string) *WsRouter {
 	return &WsRouter{
+		indexHash:    indexHash,
 		clients:      make(map[*WsClient]bool),
 		chRegister:   make(chan *WsClient),
 		chUnregister: make(chan *WsClient),
@@ -128,7 +131,7 @@ func (r *WsRouter) Start() {
 	}()
 }
 
-func (r *WsRouter) Broadcast(msg []byte) {
+func (r *WsRouter) Broadcast(msg json.RawMessage) {
 	r.chEvent <- WsRouterEvent{Type: retBroadcast, Payload: msg}
 }
 

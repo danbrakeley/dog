@@ -19,6 +19,7 @@ type Dog struct {
 	minLevel     Level
 	wsRouter     *WsRouter
 	server       http.Server
+	indexHash    string // hash of pak'd index; sent to new clients so they know if they have an old index
 }
 
 type LogLine struct {
@@ -43,10 +44,16 @@ func Create(host string) (*Dog, error) {
 		return nil, fmt.Errorf("failure parsing %s: %w", index, err)
 	}
 
+	indexHash, err := bpakGetHash(index)
+	if err != nil {
+		return nil, fmt.Errorf("failure getting hash for %s (but file loaded ok? wtf): %w", index, err)
+	}
+
 	d := &Dog{
 		homeTemplate: home,
 		minLevel:     Info,
-		wsRouter:     NewWsRouter(),
+		wsRouter:     NewWsRouter(indexHash),
+		indexHash:    indexHash,
 	}
 
 	m := http.NewServeMux()
@@ -156,17 +163,19 @@ func (d *Dog) Fatal(format string, a ...Fielder) {
 }
 
 type IndexTemplate struct {
-	AppBase  string
-	AppPath  string
-	HostName string
-	WsAddr   string
+	AppBase   string
+	AppPath   string
+	HostName  string
+	WsAddr    string
+	IndexHash string
 }
 
 func (d *Dog) handleHome(w http.ResponseWriter, r *http.Request) {
 	d.homeTemplate.Execute(w, IndexTemplate{
-		AppBase:  filepath.Base(os.Args[0]),
-		AppPath:  filepath.Dir(os.Args[0]),
-		HostName: r.Host,
-		WsAddr:   "ws://" + r.Host + "/ws",
+		AppBase:   filepath.Base(os.Args[0]),
+		AppPath:   filepath.Dir(os.Args[0]),
+		HostName:  r.Host,
+		WsAddr:    "ws://" + r.Host + "/ws",
+		IndexHash: d.indexHash,
 	})
 }

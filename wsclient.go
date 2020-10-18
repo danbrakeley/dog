@@ -1,7 +1,10 @@
 package dog
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -25,18 +28,6 @@ const (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
-}
-
-type clientEventType uint8
-
-const (
-	cetClose clientEventType = iota
-	cetSend
-)
-
-type wsClientEvent struct {
-	cet     clientEventType
-	payload []byte
 }
 
 // WsClient holds the open connection to individual websocket clients.
@@ -76,33 +67,81 @@ func CreateWsClient(conn *websocket.Conn, owner *WsRouter) *WsClient {
 		}
 	}()
 
+	// build initial message
+	var buf bytes.Buffer
+	buf.Grow(256)
+	buf.WriteString(`{"index_hash":"`)
+	buf.WriteString(owner.indexHash)
+	buf.WriteString(`"}`)
+	err := c.sendImpl(cstInit, buf.Bytes())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+	}
+
 	return c
 }
 
 // Send is a thread-safe call to send a message to this client.
 // Send will nop if called after client begins shutting down.
-func (c *WsClient) Send(msg []byte) {
-	c.sendEvent(cetSend, msg)
+func (c *WsClient) Send(msg json.RawMessage) {
+	err := c.sendImpl(cstLog, msg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+	}
 }
 
 // BeginShutDown requests that this client shut itself down.
 // BeginShutDown will nop if called after client begins shutting down.
 func (c *WsClient) BeginShutDown() {
-	c.sendEvent(cetClose, nil)
-}
-
-func (c *WsClient) sendEvent(cet clientEventType, payload []byte) {
-	select {
-	case <-c.chDead:
-		// If chDone is closed, then chSend will never be serviced.
-	case c.chSend <- wsClientEvent{cet: cet, payload: payload}:
-	}
+	c.queueEvent(cetClose, nil)
 }
 
 // Close breaks the connection, waits for everything to halt, then updates the owner.
 func (c *WsClient) WaitForShutDown() {
 	// the write pump waits for the read pump to end before ending itself, so just wait for that.
 	c.wgWrite.Wait()
+}
+
+type clientSendType uint8
+
+// clientSendType needs to stay in sync with the javascript message receiver
+const (
+	cstInit clientSendType = 0
+	cstLog  clientSendType = 1
+)
+
+type clientSendPayload struct {
+	Type clientSendType  `json:"t"`
+	Msg  json.RawMessage `json:"m"`
+}
+
+func (c *WsClient) sendImpl(cst clientSendType, msg json.RawMessage) error {
+	b, err := json.Marshal(&clientSendPayload{Type: cst, Msg: msg})
+	if err != nil {
+		return fmt.Errorf("error building message to web client: %w", err)
+	}
+	c.queueEvent(cetSend, b)
+	return nil
+}
+
+type clientEventType uint8
+
+const (
+	cetClose clientEventType = iota
+	cetSend
+)
+
+type wsClientEvent struct {
+	cet     clientEventType
+	payload json.RawMessage
+}
+
+func (c *WsClient) queueEvent(cet clientEventType, payload json.RawMessage) {
+	select {
+	case <-c.chDead:
+		// If chDone is closed, then chSend will never be serviced.
+	case c.chSend <- wsClientEvent{cet: cet, payload: payload}:
+	}
 }
 
 func (c *WsClient) readPump() error {

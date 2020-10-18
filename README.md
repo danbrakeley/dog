@@ -14,7 +14,7 @@ A logger that spins up a web browser and sends logs in real-time via websocket.
    - builds cmd/example, writing the output to `local/example[.exe]`.
 4. Run `local/example[.exe]`, then point a web browser at `localhost:8080`
 
-I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloading. I create [my own fork/branch](https://github.com/danbrakeley/air/tree/brakeley) to pull in a fix and add a [quick install script](https://github.com/danbrakeley/air/blob/brakeley/brakeley-install.sh).
+I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloading. I created [my own fork/branch](https://github.com/danbrakeley/air/tree/brakeley) to pull in an unmerged PR, and added a [quick install script](https://github.com/danbrakeley/air/blob/brakeley/brakeley-install.sh).
 
 ## TODO
 
@@ -22,6 +22,8 @@ I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloa
   - toggle on/off?
   - add filter for specific fields that must exist
   - add way to filter on field values (exact, and ranges for numbers)
+- lock start of active lines to log line
+  - adjust starting log line with a new field
 - resizable column widths
 - Add options to periodically send memory/gc stats to the web viewer
   - maybe a generic system for adding named fields and displaying them on the sidebar?
@@ -33,3 +35,4 @@ I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloa
 - ~~add toggles for log levels~~
 - ~~add simple text filter (or regex?)~~
 - ~~"currently visible" -> "active lines", then add "visible" as readonly display of actually visible lines~~
+- ~~auto reload on connection if web page found to be out of date~~
