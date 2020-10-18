@@ -77,7 +77,8 @@
     const status_alert = document.getElementById('status_alert');
     const status_msg = document.getElementById('status_msg');
     const input_history_len = document.getElementById('input-history-len');
-    const input_num_visible = document.getElementById('input-num-visible');
+    const input_visible_lines = document.getElementById('input-visible-lines');
+    const input_num_active = document.getElementById('input-num-active');
     const switches = {
       show_line: document.getElementById('switch-show-line'),
       show_timestamp: document.getElementById('switch-show-timestamp'),
@@ -98,9 +99,26 @@
     const scroll_parent = document.getElementById('scroll-parent')
     const log_line_parent = document.getElementById('log-line-parent');
     const history = [];
-    let display_max = parseInt(input_num_visible.value, 10);
+    let display_max = parseInt(input_num_active.value, 10);
 
-    const fmt_time = new Intl.DateTimeFormat('en-US', {
+    // attempt to divine the user's preferred locale, defaulting to en-US
+    const getLocale = () => {
+      let l = (navigator.languages && navigator.languages.length > 0) ? navigator.languages[0] : null;
+      if (!l) { l = navigator.language; }
+      if (!l) { l = navigator.browserLanguage; }
+      try {
+        l = Intl.getCanonicalLocales(l)[0];
+      } catch (e) {
+        l = null;
+      }
+      dlog('getLocale: ' + l);
+      return l ? l : 'en-US';
+    }
+
+    const humanizeNumber = new Intl.NumberFormat(getLocale(), {style: 'decimal'}).format;
+
+    // formatTime takes in a Date obj and reqturns a string in the form HH:MM:SS.SSS
+    const formatTime = new Intl.DateTimeFormat('en-US', {
       hour: 'numeric', minute: 'numeric', second: 'numeric',
       hour12: false, fractionalSecondDigits: 3,
     }).format;
@@ -126,6 +144,7 @@
       }
     };
 
+    // saveHistoryToFile requires FileSaver.js to provide saveAs()
     const saveHistoryToFile = () => {
       let appName = "{{.AppBase}}".replace(/\.exe$/, '');
       if (appName.length < 1) {
@@ -231,7 +250,7 @@
           colDateRef.href = 'no-javascript.html';
           colDateRef.title = `${h.date.toDateString()}, ${h.date.toTimeString()}\n`+
             '-- click to copy ISO 8601 timestamp to clipboard --';
-          colDateRef.appendChild(document.createTextNode(fmt_time(h.date)));
+          colDateRef.appendChild(document.createTextNode(formatTime(h.date)));
           colDateRef.onclick = () => {
             copyToClipboard(h.date.toISOString());
             return false;
@@ -280,11 +299,11 @@
     const is_log_entry_visible = (e) => {
       // filter by level
       switch (e.obj.level) {
-      case 'transient': if (!switches.filter_transient.checked) return false;
-      case 'verbose':   if (!switches.filter_verbose.checked)   return false;
-      case 'info':      if (!switches.filter_info.checked)      return false;
-      case 'warning':   if (!switches.filter_warning.checked)   return false;
-      case 'error':     if (!switches.filter_error.checked)     return false;
+      case 'transient': if (!switches.filter_transient.checked) { return false; } break;
+      case 'verbose':   if (!switches.filter_verbose.checked)   { return false; } break;
+      case 'info':      if (!switches.filter_info.checked)      { return false; } break;
+      case 'warning':   if (!switches.filter_warning.checked)   { return false; } break;
+      case 'error':     if (!switches.filter_error.checked)     { return false; } break;
       }
 
       // filter by msg content
@@ -308,17 +327,35 @@
       }
       e.visible = is_log_entry_visible(e);
       history.push(e);
-
-      input_history_len.value = history.length;
     }
 
-    const recalculate_visibility = () => {
+    const update_visible_line_count = () => {
+      let history_visible = 0;
+      const count = Math.min(history.length, display_max);
+      const start = Math.max(0, history.length - count);
+      const end = start + count;
+      for (let i = start; i < end; i++) {
+        if (history[i].visible) { history_visible++; }
+      }
+      input_visible_lines.value = humanizeNumber(history_visible);
+    }
+
+    const add_to_history_and_update_dom = (obj) => {
+      add_to_history(obj);
+      input_history_len.value = humanizeNumber(history.length);
+      update_visible_line_count();
+      update_log_dom();
+    }
+
+    const recalculate_visibility_and_update_dom = () => {
       const count = Math.min(history.length, display_max);
       const start = Math.max(0, history.length - count);
       const end = start + count;
       for (let i = start; i < end; i++) {
         history[i].visible = is_log_entry_visible(history[i]);
       }
+      update_visible_line_count();
+      update_log_dom();
     }
 
     const connection_status= {
@@ -378,8 +415,7 @@
       }
       ws.onmessage = function(event) {
         dlog('websocket message received');
-        add_to_history(JSON.parse(event.data));
-        update_log_dom();
+        add_to_history_and_update_dom(JSON.parse(event.data));
       }
       return false;
     };
@@ -404,8 +440,7 @@
     switches.show_level.onclick = switch_column;
 
     const switch_filter = (event) => {
-      recalculate_visibility();
-      update_log_dom();
+      recalculate_visibility_and_update_dom();
       return true;
     };
     switches.filter_transient.onclick = switch_filter;
@@ -414,12 +449,11 @@
     switches.filter_warning.onclick = switch_filter;
     switches.filter_error.onclick = switch_filter;
 
-    input_num_visible.addEventListener('keyup', ({key}) => {
+    input_num_active.addEventListener('keyup', ({key}) => {
       if (key === 'Enter') {
-        display_max = parseInt(input_num_visible.value, 10);
-        input_num_visible.value = display_max;
-        recalculate_visibility();
-        update_log_dom();
+        display_max = parseInt(input_num_active.value, 10);
+        input_num_active.value = display_max;
+        recalculate_visibility_and_update_dom();
         return true;
       }
       return false;
@@ -449,8 +483,7 @@
             input_filter_regexp.e.classList.add('is-invalid');
           }
         }
-        recalculate_visibility();
-        update_log_dom();
+        recalculate_visibility_and_update_dom();
         return true;
       }
       return false;
@@ -475,8 +508,7 @@
 
     open();
 
-    add_to_history({timestamp:new Date(Date.now()).toISOString(), level:'info', msg:'----- Start of History -----'});
-    update_log_dom();
+    add_to_history_and_update_dom({timestamp:new Date(Date.now()).toISOString(), level:'info', msg:'----- Start of History -----'});
 
   });
   </script>
@@ -508,17 +540,30 @@
         <h2 class="font-size-16 mt-20 mb-5">Log Lines</h2>
 
         <div class="input-group">
-          <div class="input-group-prepend">
-            <span class="input-group-text">In Memory:</span>
+          <div class="input-group-prepend col-6">
+            <span class="input-group-text col-12" title="In Memory is the total count of lines in memory.&#10;You can affect how many lines are visible by changing Active Lines.">
+              In Memory:
+            </span>
           </div>
-          <input id="input-history-len" type="text" value="0" class="form-control" disabled="disabled">
+          <input id="input-history-len" type="text" value="0" class="form-control col-6" disabled="disabled">
         </div>
 
         <div class="input-group">
-          <div class="input-group-prepend">
-            <span class="input-group-text">Currently Visible:</span>
+          <div class="input-group-prepend col-6">
+            <span class="input-group-text col-12" title="Visible Lines is the number Active Lines that have also passed all filters.">
+              Visible Lines:
+            </span>
           </div>
-          <input id="input-num-visible" type="text" value="1000" class="form-control">
+          <input id="input-visible-lines" type="text" value="0" class="form-control col-6" disabled="disabled">
+        </div>
+
+        <div class="input-group">
+          <div class="input-group-prepend col-6">
+            <span class="input-group-text col-12" title="Active Lines is the maximum number of lines viewable and processed by filters.&#10;Filters may reduce Visible Lines below the number of Active Lines.&#10;This number is provided as a check on filter/render performance.">
+              Active Lines:
+            </span>
+          </div>
+          <input id="input-num-active" type="text" value="1000" class="form-control col-6">
         </div>
 
         <h2 class="font-size-16 mt-20 mb-5">Columns</h2>

@@ -22,7 +22,6 @@ I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloa
   - toggle on/off?
   - add filter for specific fields that must exist
   - add way to filter on field values (exact, and ranges for numbers)
-- "currently visible" -> "active lines", then add "visible" as readonly display of actually visible lines
 - resizable column widths
 - Add options to periodically send memory/gc stats to the web viewer
   - maybe a generic system for adding named fields and displaying them on the sidebar?
@@ -33,3 +32,4 @@ I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloa
 - ~~save captured logs to text ndjson file~~
 - ~~add toggles for log levels~~
 - ~~add simple text filter (or regex?)~~
+- ~~"currently visible" -> "active lines", then add "visible" as readonly display of actually visible lines~~
