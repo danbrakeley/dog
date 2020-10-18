@@ -95,7 +95,7 @@
       prev: '',
       regexp: null,
     };
-    const input_test = document.getElementById('input-test');
+    // const input_test = document.getElementById('input-test');
     const scroll_parent = document.getElementById('scroll-parent')
     const log_line_parent = document.getElementById('log-line-parent');
     const history = [];
@@ -491,18 +491,18 @@
     input_filter_literal.addEventListener('keyup', input_filter_keyup);
     input_filter_regexp.e.addEventListener('keyup', input_filter_keyup);
 
-    document.getElementById('button-test').onclick = (event) => {
-      send(input_test.value);
-      return false;
-    };
+    // document.getElementById('button-test').onclick = (event) => {
+    //   send(input_test.value);
+    //   return false;
+    // };
   
-    input_test.addEventListener('keyup', ({key}) => {
-      if (key === 'Enter') {
-        send(input_test.value);
-        return true;
-      }
-      return false;
-    });
+    // input_test.addEventListener('keyup', ({key}) => {
+    //   if (key === 'Enter') {
+    //     send(input_test.value);
+    //     return true;
+    //   }
+    //   return false;
+    // });
 
     /** Init **/
 
@@ -609,12 +609,12 @@
         <input id="input-filter-literal" type="text" value="" placeholder="Literal Match" class="form-control">
         <input id="input-filter-regexp" type="text" value="" placeholder="Regular Expression" class="form-control">
 
-        <h2 class="font-size-16 mt-20 mb-5">Debug</h2>
+        <!-- <h2 class="font-size-16 mt-20 mb-5">Debug</h2>
 
         <div class="input-group">
           <input id="input-test" type="text" value="Test Message" class="form-control">
           <button id="button-test" class="btn btn-primary" type="button">Send</button>
-        </div>
+        </div> -->
 
       </div>
     </div>
