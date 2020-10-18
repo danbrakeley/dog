@@ -88,7 +88,14 @@
       filter_warning: document.getElementById('switch-filter-warning'),
       filter_error: document.getElementById('switch-filter-error'),
     }
+    const input_filter_literal = document.getElementById('input-filter-literal');
+    const input_filter_regexp = {
+      e: document.getElementById('input-filter-regexp'),
+      prev: '',
+      regexp: null,
+    };
     const input_test = document.getElementById('input-test');
+    const scroll_parent = document.getElementById('scroll-parent')
     const log_line_parent = document.getElementById('log-line-parent');
     const history = [];
     let display_max = parseInt(input_num_visible.value, 10);
@@ -140,13 +147,6 @@
     };
 
     const update_log_dom = () => {
-      dlog('update_log_dom', {
-        display_max, history_length:history.length,
-        scrollHeight:scroll_parent.scrollHeight,
-        scrollTop:scroll_parent.scrollTop,
-        clientHeight:scroll_parent.clientHeight,
-      });
-
       const wasAtBottom = (scroll_parent.scrollHeight <= (scroll_parent.scrollTop + scroll_parent.clientHeight));
 
       const start = Math.max(0, history.length - display_max);
@@ -164,7 +164,14 @@
         last = parseInt(lastChild.id.replace('log-line-', ''), 10) + 1;
       }
 
-      dlog('update_log_dom', {first, last, start, end, wasAtBottom});
+      dlog('update_log_dom', {
+        display_max,
+        history_length:history.length,
+        scrollHeight: scroll_parent.scrollHeight,
+        scrollTop: scroll_parent.scrollTop,
+        clientHeight: scroll_parent.clientHeight,
+        first, last, start, end, wasAtBottom,
+      });
 
       // remove lines we no longer wish to see
       for (let i = first; i < last; i++) {
@@ -174,7 +181,6 @@
           if (i >= start && i < end && h && h.visible === true) {
             continue;
           }
-          dlog(`removing ${e.id}`);
           log_line_parent.removeChild(e);
         }
       }
@@ -195,8 +201,6 @@
           // note: this assumes the contents of specific lines in history never changes
           continue;
         }
-
-        dlog(`appending visible log-line-${i}`);
 
         let row = document.createElement('div');
         row.id = `log-line-${i}`;
@@ -266,7 +270,6 @@
 
       if (wasAtBottom) {
         const isAtBottom = (scroll_parent.scrollHeight <= (scroll_parent.scrollTop + scroll_parent.clientHeight));
-        dlog('was at bottom:', {isAtBottom});
         if (!isAtBottom) {
           scroll_parent.scrollTo(0, scroll_parent.scrollHeight - scroll_parent.clientHeight);
         }
@@ -274,13 +277,27 @@
 
     }
 
-    const matches_any_filter = (e) => {
-      if (switches.filter_transient.checked && e.obj.level=='transient') return true;
-      if (switches.filter_verbose.checked && e.obj.level=='verbose') return true;
-      if (switches.filter_info.checked && e.obj.level=='info') return true;
-      if (switches.filter_warning.checked && e.obj.level=='warning') return true;
-      if (switches.filter_error.checked && e.obj.level=='error') return true;
-      return false;
+    const is_log_entry_visible = (e) => {
+      // filter by level
+      switch (e.obj.level) {
+      case 'transient': if (!switches.filter_transient.checked) return false;
+      case 'verbose':   if (!switches.filter_verbose.checked)   return false;
+      case 'info':      if (!switches.filter_info.checked)      return false;
+      case 'warning':   if (!switches.filter_warning.checked)   return false;
+      case 'error':     if (!switches.filter_error.checked)     return false;
+      }
+
+      // filter by msg content
+      if (input_filter_literal.value.length > 0 && !e.obj.msg.includes(input_filter_literal.value)) {
+        dlog('failed to match literal', input_filter_literal.value);
+        return false;
+      }
+      if (input_filter_regexp.regexp != null && !e.obj.msg.match(input_filter_regexp.regexp)) {
+        dlog('failed to match regexp', input_filter_regexp.prev);
+        return false;
+      }
+
+      return true;
     }
 
     const add_to_history = (obj) => {
@@ -289,7 +306,7 @@
         date: new Date(obj.timestamp),
         obj: obj,
       }
-      e.visible = matches_any_filter(e);
+      e.visible = is_log_entry_visible(e);
       history.push(e);
 
       input_history_len.value = history.length;
@@ -299,9 +316,8 @@
       const count = Math.min(history.length, display_max);
       const start = Math.max(0, history.length - count);
       const end = start + count;
-      dlog('recalculate_visibility', {count, start, end});
       for (let i = start; i < end; i++) {
-        history[i].visible = matches_any_filter(history[i]);
+        history[i].visible = is_log_entry_visible(history[i]);
       }
     }
 
@@ -362,20 +378,16 @@
       }
       ws.onmessage = function(event) {
         dlog('websocket message received');
-        let obj = JSON.parse(event.data);
-        dlog('-- parsed json: ', obj);
-        add_to_history(obj);
+        add_to_history(JSON.parse(event.data));
         update_log_dom();
       }
       return false;
     };
   
     const send = (msg) => {
-      dlog('send', msg);
       if (!ws) {
         return false;
       }
-      dlog('send for real', msg);
       ws.send(msg);
       return true;
     }
@@ -414,13 +426,39 @@
     });
 
     document.getElementById('button-save').onclick = (event) => {
-      dlog('button-save clicked', event);
       saveHistoryToFile();
       return false;
     }
 
+    const input_filter_keyup = ({key}) => {
+      if (key === 'Enter') {
+        // if there were changes to the regexp, then re-compile it
+        if (input_filter_regexp.e.value !== input_filter_regexp.prev) {
+          let ok = true;
+          try {
+            input_filter_regexp.regexp = new RegExp(input_filter_regexp.e.value);
+            input_filter_regexp.prev = input_filter_regexp.e.value;
+          } catch (e) {
+            ok = false;
+            input_filter_regexp.regexp = null;
+          }
+          // any problems compiling the regexp should result in error text
+          if (ok) {
+            input_filter_regexp.e.classList.remove('is-invalid');
+          } else {
+            input_filter_regexp.e.classList.add('is-invalid');
+          }
+        }
+        recalculate_visibility();
+        update_log_dom();
+        return true;
+      }
+      return false;
+    };
+    input_filter_literal.addEventListener('keyup', input_filter_keyup);
+    input_filter_regexp.e.addEventListener('keyup', input_filter_keyup);
+
     document.getElementById('button-test').onclick = (event) => {
-      dlog('button-test clicked', event);
       send(input_test.value);
       return false;
     };
@@ -432,15 +470,6 @@
       }
       return false;
     });
-
-    window.addEventListener('scroll', function() {
-      dlog(`window scroll event: ${window.pageYOffset + 'px'}`);
-    });
-
-    const scroll_parent = document.getElementById('scroll-parent')
-    scroll_parent.onscroll = (event) => {
-      dlog(`scroll-parent onscroll event: scrollHeight=${scroll_parent.scrollHeight}, scrollTop=${scroll_parent.scrollTop}, clientHeight=${scroll_parent.clientHeight}`);
-    }
 
     /** Init **/
 
@@ -531,6 +560,9 @@
           <input type="checkbox" id="switch-filter-error" value="" checked='checked'>
           <label for="switch-filter-error">Include Level Error</label>
         </div>
+
+        <input id="input-filter-literal" type="text" value="" placeholder="Literal Match" class="form-control">
+        <input id="input-filter-regexp" type="text" value="" placeholder="Regular Expression" class="form-control">
 
         <h2 class="font-size-16 mt-20 mb-5">Debug</h2>
 
