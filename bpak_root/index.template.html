@@ -35,6 +35,33 @@
     font-size: var(--code-font-size);
   }
 
+  /* Row separation */
+  body:not(.dark-mode) .row {
+    border-bottom: 1px dotted #00000020;
+  }
+  .dark-mode .row {
+    border-bottom: 1px dotted #ffffff20;
+  }
+
+  /* Fields */
+  .field-parent {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  span.field {
+    height: fit-content;
+    background-color: var(--dark-color);
+    border-radius: 7px;
+    padding: 0px 5px;
+    margin: 1px;
+  }
+  span.field-name {
+    color: var(--dm-muted-text-color);
+  }
+  span.field-separator {
+    color: #FFFFFF30;
+  }
+
   /* Color tweaks */
 
   body:not(.dark-mode) {
@@ -84,6 +111,7 @@
       show_line: document.getElementById('switch-show-line'),
       show_timestamp: document.getElementById('switch-show-timestamp'),
       show_level: document.getElementById('switch-show-level'),
+      show_fields: document.getElementById('switch-show-fields'),
       filter_transient: document.getElementById('switch-filter-transient'),
       filter_verbose: document.getElementById('switch-filter-verbose'),
       filter_info: document.getElementById('switch-filter-info'),
@@ -166,6 +194,20 @@
       }
     };
 
+    // dom building helpers
+    const divver = (classes, id) => {
+      let e = document.createElement('div');
+      e.classList.add(...classes);
+      if (id) { e.id = id; }
+      return e;
+    }
+    const spanner = (classes, id) => {
+      let e = document.createElement('span');
+      e.classList.add(...classes);
+      if (id) { e.id = id; }
+      return e;
+    }
+
     const update_log_dom = () => {
       const wasAtBottom = (scroll_parent.scrollHeight <= (scroll_parent.scrollTop + scroll_parent.clientHeight));
 
@@ -222,35 +264,23 @@
           continue;
         }
 
-        let row = document.createElement('div');
-        row.id = `log-line-${i}`;
-        row.classList.add('row');
-        row.classList.add(`row-${h.obj.level}`);
+        let row = divver(['row', `row-${h.obj.level}`], `log-line-${i}`);
 
         let colMsgWidth = 12;
 
         if (switches.show_line.checked) {
-          let colNum = document.createElement('div');
-          colNum.classList.add('col-1');
-          colNum.classList.add('text-center');
-          colNum.classList.add('fixed-width-font');
-          colNum.classList.add(`row-text-${h.obj.level}`);
+          let colNum = divver(['col-1', 'text-center', 'fixed-width-font', `row-text-${h.obj.level}`]);
           colNum.appendChild(document.createTextNode(i+1));
           row.appendChild(colNum);
           colMsgWidth -= 1;
         }
 
         if (switches.show_timestamp.checked) {
-          let colDate = document.createElement('div');
-          colDate.classList.add(`col-1`);
-          colDate.classList.add('text-center');
-          colDate.classList.add('fixed-width-font');
+          let colDate = divver([`col-1`, 'text-center', 'fixed-width-font']);
           let colDateRef = document.createElement('a');
-          colDateRef.classList.add(`row-text-${h.obj.level}`);
-          colDateRef.classList.add('text-decoration-none');
+          colDateRef.classList.add(...[`row-text-${h.obj.level}`, 'text-decoration-none']);
           colDateRef.href = 'no-javascript.html';
-          colDateRef.title = `${h.date.toDateString()}, ${h.date.toTimeString()}\n`+
-            '-- click to copy ISO 8601 timestamp to clipboard --';
+          colDateRef.title = `${h.date.toDateString()}, ${h.date.toTimeString()}\n -- click to copy ISO 8601 timestamp to clipboard --`;
           colDateRef.appendChild(document.createTextNode(formatTime(h.date)));
           colDateRef.onclick = () => {
             copyToClipboard(h.date.toISOString());
@@ -262,22 +292,38 @@
         }
 
         if (switches.show_level.checked) {
-          let colLevel = document.createElement('div');
-          colLevel.classList.add('col-1');
-          colLevel.classList.add('text-center');
-          colLevel.classList.add('fixed-width-font');
-          colLevel.classList.add(`row-text-${h.obj.level}`);
+          let colLevel = divver(['col-1', 'text-center', 'fixed-width-font', `row-text-${h.obj.level}`]);
           colLevel.appendChild(document.createTextNode(h.obj.level));
           row.appendChild(colLevel);
           colMsgWidth -= 1;
         }
 
-        let colMsg = document.createElement('div');
-        colMsg.classList.add(`col-${colMsgWidth}`);
-        colMsg.classList.add('fixed-width-font');
-        colMsg.classList.add(`row-text-${h.obj.level}`);
+        const keys = h.obj.fields ? Object.keys(h.obj.fields) : [];
+        if (keys.length > 0 && switches.show_fields.checked) {
+          colMsgWidth -= 4;
+        }
+
+        let colMsg = divver([`col-${colMsgWidth}`, 'fixed-width-font', `row-text-${h.obj.level}`]);
         colMsg.appendChild(document.createTextNode(h.obj.msg));
         row.appendChild(colMsg);
+
+        if (keys.length > 0 && switches.show_fields.checked) {
+          let colFields = divver([`col-4`, 'fixed-width-font', `row-text-${h.obj.level}`, 'field-parent']);
+          for (let i = 0; i < keys.length; i++) {
+            let span = spanner(['field']);
+            let spanName = spanner(['field-name']);
+            spanName.appendChild(document.createTextNode(keys[i]));
+            span.appendChild(spanName);
+            let spanSeparator = spanner(['field-separator']);
+            spanSeparator.appendChild(document.createTextNode('='));
+            span.appendChild(spanSeparator);
+            let spanValue = spanner(['field-value']);
+            spanValue.appendChild(document.createTextNode(JSON.stringify(h.obj.fields[keys[i]])));
+            span.appendChild(spanValue);
+            colFields.appendChild(span);
+          }
+          row.appendChild(colFields);
+        }
 
         if (!ePrev) {
           ePrev = log_line_parent.firstElementChild;
@@ -457,6 +503,7 @@
     switches.show_line.onclick = switch_column;
     switches.show_timestamp.onclick = switch_column;
     switches.show_level.onclick = switch_column;
+    switches.show_fields.onclick = switch_column;
 
     const switch_filter = (event) => {
       recalculate_visibility_and_update_dom();
@@ -600,6 +647,11 @@
         <div class="custom-switch mb-5">
           <input type="checkbox" id="switch-show-level" value="" checked='checked'>
           <label for="switch-show-level">Show Log Level</label>
+        </div>
+
+        <div class="custom-switch mb-5">
+          <input type="checkbox" id="switch-show-fields" value="" checked='checked'>
+          <label for="switch-show-fields">Show Fields</label>
         </div>
 
         <h2 class="font-size-16 mt-20 mb-5">Filters</h2>

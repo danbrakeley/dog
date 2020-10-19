@@ -18,17 +18,19 @@ I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloa
 
 ## TODO
 
-- display structured data
-  - toggle on/off?
-  - add filter for specific fields that must exist
-  - add way to filter on field values (exact, and ranges for numbers)
 - lock start of active lines to log line
   - adjust starting log line with a new field
+- mark a field as "global", showing it in a static position, and not after the log lines where it appears
+  - should this be on the server's side or a client ui?
+- structured data filters
+  - add filter for specific fields that must exist
+  - add way to filter on field values (exact, and ranges for numbers)
 - resizable column widths
 - Add options to periodically send memory/gc stats to the web viewer
   - maybe a generic system for adding named fields and displaying them on the sidebar?
 - Instead of mirroring frog's interface, maybe make it a module that requires frog to work?
 - add multiple filters that can be quickly switched between
+- add highlights in addition to filters, for adding custom background colors to rows containing specific terms
 - ~~cleanup http server and any open connections on Close()~~
 - ~~add visually distinct formatting for fatal log lines~~
 - ~~save captured logs to text ndjson file~~
@@ -36,3 +38,4 @@ I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloa
 - ~~add simple text filter (or regex?)~~
 - ~~"currently visible" -> "active lines", then add "visible" as readonly display of actually visible lines~~
 - ~~auto reload on connection if web page found to be out of date~~
+- ~~display structured data ("fields")~~
