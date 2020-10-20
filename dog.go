@@ -51,14 +51,15 @@ func Create(host string) (*Dog, error) {
 
 	d := &Dog{
 		homeTemplate: home,
-		minLevel:     Info,
 		wsRouter:     NewWsRouter(indexHash),
+		minLevel:     Info,
 		indexHash:    indexHash,
 	}
 
+	// build http server
 	m := http.NewServeMux()
 	m.Handle("/static/", http.FileServer(&bpakFileSystem{}))
-	m.HandleFunc("/ws", d.wsRouter.ServeWs)
+	m.HandleFunc("/ws", d.wsRouter.serveWs)
 	m.HandleFunc("/", d.handleHome)
 	d.server = http.Server{Addr: host, Handler: m}
 
@@ -84,6 +85,15 @@ func Create(host string) (*Dog, error) {
 	}()
 
 	return d, nil
+}
+
+func SetClientMsgHandler(l Logger, fn func(m WsMsg)) {
+	d, ok := l.(*Dog)
+	if !ok {
+		fmt.Println("cannot SetClientMsgHandler on Logger that is not a Dog")
+		return
+	}
+	d.wsRouter.SetClientMsgHandler(fn)
 }
 
 // Close is part of the Logger interface

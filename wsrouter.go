@@ -8,6 +8,12 @@ import (
 	"sync"
 )
 
+type WsMsg struct {
+	Router *WsRouter
+	Client *WsClient
+	Msg    []byte
+}
+
 type routerEventType uint8
 
 const (
@@ -15,17 +21,18 @@ const (
 	retBroadcast
 )
 
-type WsRouterEvent struct {
+type wsRouterEvent struct {
 	Type    routerEventType
 	Payload json.RawMessage
 }
 
 type WsRouter struct {
 	indexHash    string // let's a connected client know when their cached web page is out of date
+	msgHandler   func(WsMsg)
 	clients      map[*WsClient]bool
 	chRegister   chan *WsClient
 	chUnregister chan *WsClient
-	chEvent      chan WsRouterEvent
+	chEvent      chan wsRouterEvent
 	wgPump       sync.WaitGroup
 	chDead       chan struct{}
 }
@@ -37,13 +44,13 @@ func NewWsRouter(indexHash string) *WsRouter {
 		clients:      make(map[*WsClient]bool),
 		chRegister:   make(chan *WsClient),
 		chUnregister: make(chan *WsClient),
-		chEvent:      make(chan WsRouterEvent),
+		chEvent:      make(chan wsRouterEvent),
 		chDead:       make(chan struct{}),
 	}
 }
 
-// ServeWs upgrades http requests to websocket connections
-func (r *WsRouter) ServeWs(w http.ResponseWriter, req *http.Request) {
+// serveWs upgrades http requests to websocket connections
+func (r *WsRouter) serveWs(w http.ResponseWriter, req *http.Request) {
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error upgrading connection to websocket: %v\n", err)
@@ -58,16 +65,21 @@ func (r *WsRouter) ServeWs(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *WsRouter) HandleClientMessage(c *WsClient, mt int, b []byte) {
-	// TODO: do something with client messages
-	fmt.Printf("!!! CLIENT MESSAGE [%d]: %s", mt, string(b))
+func (r *WsRouter) SetClientMsgHandler(fn func(WsMsg)) {
+	r.msgHandler = fn
 }
 
-func (r *WsRouter) HandleClientError(c *WsClient, err error) {
+func (r *WsRouter) handleClientMessage(c *WsClient, b []byte) {
+	if r.msgHandler != nil {
+		r.msgHandler(WsMsg{Router: r, Client: c, Msg: b})
+	}
+}
+
+func (r *WsRouter) handleClientError(c *WsClient, err error) {
 	fmt.Fprintf(os.Stderr, "error in websocket router: %v\n", err)
 }
 
-func (r *WsRouter) HandleClientShutdown(c *WsClient) {
+func (r *WsRouter) handleClientShutdown(c *WsClient) {
 	select {
 	case <-r.chDead:
 	case r.chUnregister <- c:
@@ -132,11 +144,11 @@ func (r *WsRouter) Start() {
 }
 
 func (r *WsRouter) Broadcast(msg json.RawMessage) {
-	r.chEvent <- WsRouterEvent{Type: retBroadcast, Payload: msg}
+	r.chEvent <- wsRouterEvent{Type: retBroadcast, Payload: msg}
 }
 
 func (r *WsRouter) BeginShutdown() {
-	r.chEvent <- WsRouterEvent{Type: retClose, Payload: nil}
+	r.chEvent <- wsRouterEvent{Type: retClose, Payload: nil}
 }
 
 func (r *WsRouter) WaitForShutdown() {

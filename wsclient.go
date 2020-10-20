@@ -54,7 +54,7 @@ func CreateWsClient(conn *websocket.Conn, owner *WsRouter) *WsClient {
 		defer c.wgWrite.Done()
 		err := c.writePump()
 		if err != nil {
-			c.owner.HandleClientError(c, err)
+			c.owner.handleClientError(c, err)
 		}
 	}()
 
@@ -63,7 +63,7 @@ func CreateWsClient(conn *websocket.Conn, owner *WsRouter) *WsClient {
 		defer c.wgRead.Done()
 		err := c.readPump()
 		if err != nil {
-			c.owner.HandleClientError(c, err)
+			c.owner.handleClientError(c, err)
 		}
 	}()
 
@@ -174,7 +174,9 @@ func (c *WsClient) readPump() error {
 			return fmt.Errorf("read message: %w", err)
 		}
 
-		c.owner.HandleClientMessage(c, mtype, msg)
+		if mtype == websocket.TextMessage {
+			c.owner.handleClientMessage(c, msg)
+		}
 	}
 }
 
@@ -189,7 +191,7 @@ func (c *WsClient) writePump() error {
 		// read pump should die now that the connection is dead, so wait for it
 		c.wgRead.Wait()
 		// finally tell the owner we no longer exist
-		c.owner.HandleClientShutdown(c)
+		c.owner.handleClientShutdown(c)
 	}()
 
 	for {

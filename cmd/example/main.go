@@ -2,7 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"math/rand"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/danbrakeley/dog"
@@ -20,25 +24,123 @@ func main() {
 	defer log.Close()
 	log.SetMinLevel(dog.Transient)
 
-	log.Info("first")
-	time.Sleep(time.Second)
-	log.Info("second")
-	time.Sleep(time.Second)
-	log.Info("third")
-	time.Sleep(time.Second)
-	log.Transient("this is a Transient log line")
-	log.Verbose("this is a Verbose log line")
-	log.Info("this is an Info log line")
-	log.Warning("this is a Warning log line")
-	log.Error("this is an Error log line")
-	// log.Fatal("this is a Fatal log line")
-	time.Sleep(time.Second)
+	// setup a channel to take in client messages as they arrive
+	chMsg := make(chan dog.WsMsg, 1024)
+	dog.SetClientMsgHandler(log, func(m dog.WsMsg) {
+		chMsg <- m
+	})
 
+	// setup a channel for commands to be run
+	chCmd := make(chan command, 1024)
+
+	// translate client messages to commands
+	reNumber := regexp.MustCompile(`^([0-9]+)$`)
+	rePrint := regexp.MustCompile(`^s ([0-9]+)$`)
+
+	// start client message processor
+	go func() {
+		for {
+			msg := <-chMsg
+			strMsg := strings.TrimSpace(string(msg.Msg))
+
+			// help
+			if strMsg == "help" {
+				sendHelp(chCmd)
+				continue
+			}
+
+			// fatal
+			if strMsg == "fatal" {
+				log.Fatal("interrupting cow")
+				continue
+			}
+
+			// just a number
+			if reNumber.MatchString(strMsg) {
+				n, err := strconv.ParseInt(strMsg, 10, 32)
+				if err != nil {
+					fmt.Printf("unable to parse number: %v", err)
+					continue
+				}
+				addRandos(chCmd, int(n), false)
+				continue
+			}
+
+			// "p <number>"
+			m := rePrint.FindSubmatch(msg.Msg)
+			if len(m) == 2 {
+				n, err := strconv.ParseInt(string(m[1]), 10, 32)
+				if err != nil {
+					fmt.Printf("unable to parse number: %v", err)
+					continue
+				}
+				addRandos(chCmd, int(n), true)
+				continue
+			}
+		}
+	}()
+
+	chCmd <- command{Type: "info", Msg: "three..."}
+	chCmd <- command{Type: "sleep", Dur: time.Second}
+	chCmd <- command{Type: "info", Msg: "two..."}
+	chCmd <- command{Type: "sleep", Dur: time.Second}
+	chCmd <- command{Type: "info", Msg: "one..."}
+	chCmd <- command{Type: "sleep", Dur: time.Second}
+	chCmd <- command{Type: "transient", Msg: "this is a Transient log line"}
+	chCmd <- command{Type: "verbose", Msg: "this is a Verbose log line"}
+	chCmd <- command{Type: "info", Msg: "this is a Info log line"}
+	chCmd <- command{Type: "warning", Msg: "this is a Warning log line"}
+	chCmd <- command{Type: "error", Msg: "this is a Error log line"}
+	sendHelp(chCmd)
+
+	// run commands as they come in
+	for cmd := range chCmd {
+		switch cmd.Type {
+		case "sleep":
+			time.Sleep(cmd.Dur)
+		case "transient":
+			log.Transient(cmd.Msg, cmd.Fields...)
+		case "verbose":
+			log.Verbose(cmd.Msg, cmd.Fields...)
+		case "info":
+			log.Info(cmd.Msg, cmd.Fields...)
+		case "warning":
+			log.Warning(cmd.Msg, cmd.Fields...)
+		case "error":
+			log.Error(cmd.Msg, cmd.Fields...)
+		case "fatal":
+			log.Fatal(cmd.Msg, cmd.Fields...)
+		}
+	}
+
+}
+
+type command struct {
+	Type   string
+	Dur    time.Duration
+	Msg    string
+	Fields []dog.Fielder
+}
+
+func sendHelp(chCmd chan command) {
+	chCmd <- command{Type: "transient", Msg: "------------------------------------------------------------"}
+	chCmd <- command{Type: "warning", Msg: "------------------------------------------------------------"}
+	chCmd <- command{Type: "info", Msg: "- Available Commands:"}
+	chCmd <- command{Type: "info", Msg: "- <num> == send <num> random log lines"}
+	chCmd <- command{Type: "info", Msg: "- s <num> == send <num> log lines, pausing randomly (simulate a real app)"}
+	chCmd <- command{Type: "info", Msg: "- fatal == send a fatal log line (will kill server)"}
+	chCmd <- command{Type: "info", Msg: "- help == send this message"}
+	chCmd <- command{Type: "error", Msg: "------------------------------------------------------------"}
+	chCmd <- command{Type: "verbose", Msg: "------------------------------------------------------------"}
+}
+
+func addRandos(chCmd chan command, n int, includeSleeps bool) {
 	var rando int
-	for {
-		msg := pick(msgContents)
+	for i := 0; i < n; i++ {
+		cmd := command{
+			Msg: pick(msgContents),
+		}
 
-		fields := []dog.Fielder{}
 		count := 0
 		rando = rand.Intn(40)
 		switch {
@@ -71,25 +173,29 @@ func main() {
 			default:
 				f = dog.String(pick(fieldNames)+"_str", pick(fieldNames))
 			}
-			fields = append(fields, f)
+			cmd.Fields = append(cmd.Fields, f)
 		}
 
 		rando = rand.Intn(40)
 		switch {
 		case rando < 1:
-			log.Error(msg, fields...)
+			cmd.Type = "error"
 		case rando < 4:
-			log.Warning(msg, fields...)
+			cmd.Type = "warning"
 		case rando < 6:
-			log.Verbose(msg, fields...)
+			cmd.Type = "verbose"
 		default:
-			log.Info(msg, fields...)
+			cmd.Type = "info"
 		}
 
-		if rand.Intn(20) != 0 {
-			continue
+		chCmd <- cmd
+
+		if includeSleeps && rand.Intn(20) == 0 {
+			chCmd <- command{
+				Type: "sleep",
+				Dur:  time.Duration(rand.Intn(2000)+200) * time.Millisecond,
+			}
 		}
-		time.Sleep(time.Duration(rand.Intn(2000)+200) * time.Millisecond)
 	}
 }
 

@@ -26,6 +26,13 @@
       color: var(--input-text-color);
   }
 
+  .sidebar .collapse-content {
+    padding-left: 10px;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
   /* Log line formatting */
   .fixed-width-font {
     font-family: SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
@@ -138,7 +145,7 @@
       prev: '',
       regexp: null,
     };
-    // const input_test = document.getElementById('input-test');
+    const input_test = document.getElementById('input-test');
     const scroll_parent = document.getElementById('scroll-parent')
     const log_line_parent = document.getElementById('log-line-parent');
     const history = [];
@@ -571,18 +578,18 @@
     input_filter_literal.addEventListener('keyup', input_filter_keyup);
     input_filter_regexp.e.addEventListener('keyup', input_filter_keyup);
 
-    // document.getElementById('button-test').onclick = (event) => {
-    //   send(input_test.value);
-    //   return false;
-    // };
+    document.getElementById('button-test').onclick = (event) => {
+      send(input_test.value);
+      return false;
+    };
   
-    // input_test.addEventListener('keyup', ({key}) => {
-    //   if (key === 'Enter') {
-    //     send(input_test.value);
-    //     return true;
-    //   }
-    //   return false;
-    // });
+    input_test.addEventListener('keyup', ({key}) => {
+      if (key === 'Enter') {
+        send(input_test.value);
+        return true;
+      }
+      return false;
+    });
 
     /** Init **/
 
@@ -615,91 +622,102 @@
           <small id="status_msg">Javascript not running</small>
         </div>
 
-        <button id="button-save" class="btn btn-primary btn-block" type="button">Save Log to File...</button>
+        <button id="button-save" class="btn btn-primary btn-block mb-20" type="button">Save Log to File...</button>
 
-        <h2 class="font-size-16 mt-20 mb-5">Log Lines</h2>
+        <details class="collapse-panel" open>
+          <summary class="collapse-header">
+            Log Lines
+          </summary>
 
-        <div class="input-group">
-          <div class="input-group-prepend col-6">
-            <span class="input-group-text col-12" title="In Memory is the total count of lines in memory.&#10;You can affect how many lines are visible by changing Active Lines.">
-              In Memory:
-            </span>
+          <div class="collapse-content">
+            <div class="input-group">
+              <div class="input-group-prepend col-6">
+                <span class="input-group-text col-12" title="In Memory is the total count of lines in memory.&#10;You can affect how many lines are visible by changing Active Lines.">
+                  In Memory:
+                </span>
+              </div>
+              <input id="input-history-len" type="text" value="0" class="form-control col-6" disabled="disabled">
+            </div>
+            <div class="input-group">
+              <div class="input-group-prepend col-6">
+                <span class="input-group-text col-12" title="Visible Lines is the number Active Lines that have also passed all filters.">
+                  Visible Lines:
+                </span>
+              </div>
+              <input id="input-visible-lines" type="text" value="0" class="form-control col-6" disabled="disabled">
+            </div>
+            <div class="input-group">
+              <div class="input-group-prepend col-6">
+                <span class="input-group-text col-12" title="Active Lines is the maximum number of lines viewable and processed by filters.&#10;Filters may reduce Visible Lines below the number of Active Lines.&#10;This number is provided as a check on filter/render performance.">
+                  Active Lines:
+                </span>
+              </div>
+              <input id="input-num-active" type="text" value="1000" class="form-control col-6">
+            </div>
           </div>
-          <input id="input-history-len" type="text" value="0" class="form-control col-6" disabled="disabled">
-        </div>
+        </details>
 
-        <div class="input-group">
-          <div class="input-group-prepend col-6">
-            <span class="input-group-text col-12" title="Visible Lines is the number Active Lines that have also passed all filters.">
-              Visible Lines:
-            </span>
+        <details class="collapse-panel" open>
+          <summary class="collapse-header">
+            Columns
+          </summary>
+          <div class="collapse-content">
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-show-line" value="">
+              <label for="switch-show-line">Show Line Number</label>
+            </div>
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-show-timestamp" value="" checked='checked'>
+              <label for="switch-show-timestamp">Show Date/Time</label>
+            </div>
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-show-level" value="" checked='checked'>
+              <label for="switch-show-level">Show Log Level</label>
+            </div>
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-show-fields" value="" checked='checked'>
+              <label for="switch-show-fields">Show Fields</label>
+            </div>
           </div>
-          <input id="input-visible-lines" type="text" value="0" class="form-control col-6" disabled="disabled">
-        </div>
+        </details>
 
-        <div class="input-group">
-          <div class="input-group-prepend col-6">
-            <span class="input-group-text col-12" title="Active Lines is the maximum number of lines viewable and processed by filters.&#10;Filters may reduce Visible Lines below the number of Active Lines.&#10;This number is provided as a check on filter/render performance.">
-              Active Lines:
-            </span>
+        <details class="collapse-panel" open>
+          <summary class="collapse-header">
+            Filters
+          </summary>
+          <div class="collapse-content">
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-filter-transient" value="">
+              <label for="switch-filter-transient">Include Level Transient</label>
+            </div>
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-filter-verbose" value="">
+              <label for="switch-filter-verbose">Include Level Verbose</label>
+            </div>
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-filter-info" value="" checked='checked'>
+              <label for="switch-filter-info">Include Level Info</label>
+            </div>
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-filter-warning" value="" checked='checked'>
+              <label for="switch-filter-warning">Include Level Warning</label>
+            </div>
+            <div class="custom-switch mb-5">
+              <input type="checkbox" id="switch-filter-error" value="" checked='checked'>
+              <label for="switch-filter-error">Include Level Error</label>
+            </div>
+    
+            <input id="input-filter-literal" type="text" value="" placeholder="Literal Match" class="form-control">
+            <input id="input-filter-regexp" type="text" value="" placeholder="Regular Expression" class="form-control">
           </div>
-          <input id="input-num-active" type="text" value="1000" class="form-control col-6">
-        </div>
+        </details>
 
-        <h2 class="font-size-16 mt-20 mb-5">Columns</h2>
-
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-show-line" value="">
-          <label for="switch-show-line">Show Line Number</label>
-        </div>
-
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-show-timestamp" value="" checked='checked'>
-          <label for="switch-show-timestamp">Show Date/Time</label>
-        </div>
-
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-show-level" value="" checked='checked'>
-          <label for="switch-show-level">Show Log Level</label>
-        </div>
-
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-show-fields" value="" checked='checked'>
-          <label for="switch-show-fields">Show Fields</label>
-        </div>
-
-        <h2 class="font-size-16 mt-20 mb-5">Filters</h2>
-
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-filter-transient" value="">
-          <label for="switch-filter-transient">Include Level Transient</label>
-        </div>
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-filter-verbose" value="">
-          <label for="switch-filter-verbose">Include Level Verbose</label>
-        </div>
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-filter-info" value="" checked='checked'>
-          <label for="switch-filter-info">Include Level Info</label>
-        </div>
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-filter-warning" value="" checked='checked'>
-          <label for="switch-filter-warning">Include Level Warning</label>
-        </div>
-        <div class="custom-switch mb-5">
-          <input type="checkbox" id="switch-filter-error" value="" checked='checked'>
-          <label for="switch-filter-error">Include Level Error</label>
-        </div>
-
-        <input id="input-filter-literal" type="text" value="" placeholder="Literal Match" class="form-control">
-        <input id="input-filter-regexp" type="text" value="" placeholder="Regular Expression" class="form-control">
-
-        <!-- <h2 class="font-size-16 mt-20 mb-5">Debug</h2>
+        <h2 class="font-size-16 mt-20 mb-5">Command</h2>
 
         <div class="input-group">
-          <input id="input-test" type="text" value="Test Message" class="form-control">
+          <input id="input-test" type="text" value="" class="form-control">
           <button id="button-test" class="btn btn-primary" type="button">Send</button>
-        </div> -->
+        </div>
 
       </div>
     </div>
