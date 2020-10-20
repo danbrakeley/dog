@@ -44,22 +44,36 @@
   }
 
   /* Fields */
+
   .field-parent {
     display: flex;
     flex-wrap: wrap;
   }
   span.field {
     height: fit-content;
-    background-color: var(--dark-color);
     border-radius: 7px;
     padding: 0px 5px;
     margin: 1px;
   }
-  span.field-name {
+  /* Dark Mode */
+  .dark-mode span.field {
+    background-color: var(--dark-color);
+  }
+  .dark-mode span.field-name {
     color: var(--dm-muted-text-color);
   }
-  span.field-separator {
+  .dark-mode span.field-separator {
     color: #FFFFFF30;
+  }
+  /* Light Mode */
+  body:not(.dark-mode) span.field {
+    background-color: #ffffff80;
+  }
+  body:not(.dark-mode) span.field-name {
+    color: var(--lm-muted-text-color);
+  }
+  body:not(.dark-mode) span.field-separator {
+    color: #00000050;
   }
 
   /* Color tweaks */
@@ -315,7 +329,7 @@
             spanName.appendChild(document.createTextNode(keys[i]));
             span.appendChild(spanName);
             let spanSeparator = spanner(['field-separator']);
-            spanSeparator.appendChild(document.createTextNode('='));
+            spanSeparator.appendChild(document.createTextNode(':'));
             span.appendChild(spanSeparator);
             let spanValue = spanner(['field-value']);
             spanValue.appendChild(document.createTextNode(JSON.stringify(h.obj.fields[keys[i]])));
