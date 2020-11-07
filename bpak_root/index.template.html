@@ -29,8 +29,41 @@
   .sidebar .collapse-content {
     padding-left: 10px;
     padding-right: 0;
-    padding-top: 0;
-    padding-bottom: 0;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  /* collapse header opened */
+  .sidebar .collapse-panel[open] .collapse-header:not(.without-arrow) {
+    padding: 0.5rem 0.5rem 0.5rem 3.0rem;
+    text-transform: uppercase;
+    font-size: 1.2rem;
+    font-weight: 600;
+    background-position: 1.0rem;
+  }
+  body:not(.dark-mode) .sidebar .collapse-panel[open] .collapse-header:not(.without-arrow) {
+    color: var(--lm-muted-text-color);
+  }
+  .dark-mode .sidebar .collapse-panel[open] .collapse-header:not(.without-arrow) {
+    color: var(--dm-muted-text-color);
+  }
+
+  /* collapse header closed */
+  .sidebar .collapse-panel .collapse-header:not(.without-arrow) {
+    padding: 0.5rem 0.5rem 0.5rem 3.0rem;
+    text-transform: uppercase;
+    font-size: 1.4rem;
+    font-weight: 600;
+    background-position: 1.0rem;
+  }
+
+  .sidebar details[open] summary ~ * {
+    animation: sidebar-collapse-sweep .33s ease-in-out;
+  }
+
+  @keyframes sidebar-collapse-sweep {
+    0%    {opacity: 0; margin-left: -1.5rem}
+    100%  {opacity: 1; margin-left: 0px}
   }
 
   /* Log line formatting */
@@ -119,7 +152,7 @@
     const index_hash = "{{.IndexHash}}";
     const dlog = function(...args) {
       // comment out to disable debug logs
-      console.log(...args);
+      // console.log(...args);
     }
 
     var ws;
@@ -408,8 +441,8 @@
       input_visible_lines.value = humanizeNumber(history_visible);
     }
 
-    const add_to_history_and_update_dom = (obj) => {
-      add_to_history(obj);
+    const add_to_history_and_update_dom = (objs) => {
+      objs.forEach(elem => add_to_history(elem));
       input_history_len.value = humanizeNumber(history.length);
       update_visible_line_count();
       update_log_dom();
@@ -464,6 +497,9 @@
       }
     }
   
+    let unprocessed_msgs = []
+    let unprocessed_timer = null
+
     const open = (event) => {
       if (ws) {
         return false;
@@ -499,7 +535,14 @@
           }
           break;
         case msgTypeLog:
-          add_to_history_and_update_dom(obj.m);
+          unprocessed_msgs.push(obj.m);
+          if (unprocessed_timer == null) {
+            unprocessed_timer = setTimeout(() => {
+              add_to_history_and_update_dom(unprocessed_msgs);
+              unprocessed_msgs = [];
+              unprocessed_timer = null;
+            }, 100);
+          }
           break;
         }
       }
@@ -595,7 +638,9 @@
 
     open();
 
-    add_to_history_and_update_dom({timestamp:new Date(Date.now()).toISOString(), level:'info', msg:'----- Start of History -----'});
+    add_to_history_and_update_dom([
+      {timestamp:new Date(Date.now()).toISOString(), level:'info', msg:'----- Start of History -----'},
+    ]);
 
   });
   </script>
@@ -624,11 +669,8 @@
 
         <button id="button-save" class="btn btn-primary btn-block mb-20" type="button">Save Log to File...</button>
 
-        <details class="collapse-panel" open>
-          <summary class="collapse-header">
-            Log Lines
-          </summary>
-
+        <details class="collapse-panel mb-10" open>
+          <summary class="collapse-header">Log Lines</summary>
           <div class="collapse-content">
             <div class="input-group">
               <div class="input-group-prepend col-6">
@@ -657,10 +699,8 @@
           </div>
         </details>
 
-        <details class="collapse-panel" open>
-          <summary class="collapse-header">
-            Columns
-          </summary>
+        <details class="collapse-panel mb-10">
+          <summary class="collapse-header">Columns</summary>
           <div class="collapse-content">
             <div class="custom-switch mb-5">
               <input type="checkbox" id="switch-show-line" value="">
@@ -681,34 +721,32 @@
           </div>
         </details>
 
-        <details class="collapse-panel" open>
-          <summary class="collapse-header">
-            Filters
-          </summary>
+        <details class="collapse-panel mb-10">
+          <summary class="collapse-header">Filters</summary>
           <div class="collapse-content">
-            <div class="custom-switch mb-5">
+            <input id="input-filter-literal" type="text" value="" placeholder="Literal Match" class="form-control">
+            <input id="input-filter-regexp" type="text" value="" placeholder="Regular Expression" class="form-control">
+
+            <div class="custom-switch mt-5">
               <input type="checkbox" id="switch-filter-transient" value="">
               <label for="switch-filter-transient">Include Level Transient</label>
             </div>
-            <div class="custom-switch mb-5">
+            <div class="custom-switch mt-5">
               <input type="checkbox" id="switch-filter-verbose" value="">
               <label for="switch-filter-verbose">Include Level Verbose</label>
             </div>
-            <div class="custom-switch mb-5">
+            <div class="custom-switch mt-5">
               <input type="checkbox" id="switch-filter-info" value="" checked='checked'>
               <label for="switch-filter-info">Include Level Info</label>
             </div>
-            <div class="custom-switch mb-5">
+            <div class="custom-switch mt-5">
               <input type="checkbox" id="switch-filter-warning" value="" checked='checked'>
               <label for="switch-filter-warning">Include Level Warning</label>
             </div>
-            <div class="custom-switch mb-5">
+            <div class="custom-switch mt-5">
               <input type="checkbox" id="switch-filter-error" value="" checked='checked'>
               <label for="switch-filter-error">Include Level Error</label>
             </div>
-    
-            <input id="input-filter-literal" type="text" value="" placeholder="Literal Match" class="form-control">
-            <input id="input-filter-regexp" type="text" value="" placeholder="Regular Expression" class="form-control">
           </div>
         </details>
 

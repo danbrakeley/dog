@@ -18,8 +18,6 @@ I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloa
 
 ## TODO
 
-- lock start of active lines to log line
-  - adjust starting log line with a new field
 - mark a field as "global", showing it in a static position, and not after the log lines where it appears
   - should this be on the server's side or a client ui?
 - structured data filters
@@ -39,6 +37,35 @@ I've also been playing with [Air](https://github.com/cosmtrek/air) for hot-reloa
 - ~~"currently visible" -> "active lines", then add "visible" as readonly display of actually visible lines~~
 - ~~auto reload on connection if web page found to be out of date~~
 - ~~display structured data ("fields")~~
+- infinity scroll
+  ```js
+    // source: https://www.javascripttutorial.net/dom/css/check-if-an-element-is-visible-in-the-viewport/
+    const isInViewport = (element) => {
+      const rect = element.getBoundingClientRect();
+      return (
+        rect.top >= 0 &&
+        rect.left >= 0 &&
+        rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+        rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+      );
+    }
+
+    scroll_parent.addEventListener('scroll',
+      () => {
+        let str = '----- ';
+        let nodes = log_line_parent.children;
+        for (let i = 0; i < nodes.length; i++) {
+          if (isInViewport(nodes[i])) {
+            str += '#';
+          } else {
+            str += '_';
+          }
+        }
+        dlog(str);
+      },
+      { passive: true },
+    );
+  ```
 
 ## License
 
