@@ -8,8 +8,6 @@ A logger that spins up a web browser and sends logs in real-time via websocket.
 2. If you are on Windows, you'll want a bash shell.
    - I use git-bash, which comes with [Git for Windows](https://gitforwindows.org).
 3. In bash, `cd` into the path where you cloned this repo, then run `./build-dev.sh`, which does the following:
-   - rebuilds/installs bpak.exe, if needed
-   - regenerates the bpak'd html/jss/cs files
    - runs tests
    - builds cmd/example, writing the output to `local/example[.exe]`.
 4. Run `local/example[.exe]`, then point a web browser at `localhost:8080`

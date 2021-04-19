@@ -2,6 +2,9 @@ package dog
 
 import (
 	"context"
+	"crypto/sha256"
+	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -12,7 +15,8 @@ import (
 	"unicode/utf8"
 )
 
-//go:generate bpak --package "$GOPACKAGE" --file bpak.go --root bpak_root
+//go:embed embed/static embed/*
+var embedfs embed.FS
 
 type Dog struct {
 	homeTemplate *template.Template
@@ -30,8 +34,8 @@ type LogLine struct {
 }
 
 func Create(host string) (*Dog, error) {
-	index := "index.template.html"
-	b, err := bpakGet(index)
+	index := "embed/index.template.html"
+	b, err := embedfs.ReadFile(index)
 	if err != nil {
 		return nil, fmt.Errorf("failure loading %s: %w", index, err)
 	}
@@ -44,10 +48,12 @@ func Create(host string) (*Dog, error) {
 		return nil, fmt.Errorf("failure parsing %s: %w", index, err)
 	}
 
-	indexHash, err := bpakGetHash(index)
+	h := sha256.New()
+	_, err = h.Write(b)
 	if err != nil {
-		return nil, fmt.Errorf("failure getting hash for %s (but file loaded ok? wtf): %w", index, err)
+		return nil, fmt.Errorf("failure computing hash for %s: %w", index, err)
 	}
+	indexHash := hex.EncodeToString(h.Sum(nil))
 
 	d := &Dog{
 		homeTemplate: home,
@@ -58,7 +64,7 @@ func Create(host string) (*Dog, error) {
 
 	// build http server
 	m := http.NewServeMux()
-	m.Handle("/static/", http.FileServer(&bpakFileSystem{}))
+	m.Handle("/static/", http.StripPrefix("embed/", http.FileServer(http.FS(embedfs))))
 	m.HandleFunc("/ws", d.wsRouter.serveWs)
 	m.HandleFunc("/", d.handleHome)
 	d.server = http.Server{Addr: host, Handler: m}

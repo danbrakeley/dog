@@ -1,5 +1,4 @@
-#!/bin/bash
-set -e
+#!/bin/bash -e
 cd `dirname "$0"`
 
 mkdir -p local
@@ -10,28 +9,18 @@ then
   exit 1
 fi
 
-echo "Updating bpak..."
-go install ./cmd/bpak
+GOOS=$(go env GOOS)
+GOARCH=$(go env GOARCH)
+TARGET_EXE=example
 
-if ! command -v bpak &> /dev/null
-then
-  echo "could not find bpak after installing it. Make sure your \$GOPATH/bin is in your path."
-  exit 1
+if [[ "${GOOS}" == "windows" ]]; then
+  TARGET_EXE=${TARGET_EXE}.exe
 fi
-
-echo "Generating..."
-go generate
 
 echo "Testing..."
 go test ./...
 
 echo "Building example..."
-exename=example
-if [[ "$OSTYPE" == "cygwin" ]]; then
-  exename=example.exe
-elif [[ "$OSTYPE" == "msys" ]]; then
-  exename=example.exe
-fi
-go build -o local/$exename ./cmd/example
+go build -o local/$TARGET_EXE ./cmd/example
 
 echo "Done"
